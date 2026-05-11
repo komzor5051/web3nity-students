@@ -1,0 +1,16 @@
+node_modules/
+.env
+.env.local
+*.log
+dist/
+.next/
+.turbo/
+.vercel/
+coverage/
+.DS_Store
+# import artefacts
+.cache/
+imports/
+
+# build artefacts
+*.tsbuildinfo
