@@ -25,7 +25,93 @@ const SITE_URL = process.env.SITE_URL ?? 'https://ai-education.io/students';
 const bot = new Telegraf(TOKEN);
 const db = getServiceClient();
 
-// === Команды ===
+// === Группа курса: фоновое чтение всех сообщений ===
+//
+// Этот middleware регистрируется ПЕРВЫМ. Для не-личных чатов он сам обрабатывает
+// сообщение (запись в raw_messages + дозапись username) и НЕ пропускает дальше —
+// личный кабинет (команды, FSM) работает только в личке. Для лички — next().
+
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID ? Number(process.env.TELEGRAM_CHAT_ID) : null;
+const seenChats = new Set<number>();
+
+function describeMedia(m: Record<string, unknown>): { type: string; filename?: string }[] | null {
+  const out: { type: string; filename?: string }[] = [];
+  if (Array.isArray(m.photo)) out.push({ type: 'image' });
+  if (m.video) out.push({ type: 'video' });
+  if (m.animation) out.push({ type: 'video' });
+  if (m.document) out.push({ type: 'file', filename: (m.document as { file_name?: string }).file_name });
+  if (m.voice || m.video_note) out.push({ type: 'voice' });
+  if (m.sticker) out.push({ type: 'sticker' });
+  return out.length ? out : null;
+}
+
+bot.use(async (ctx, next) => {
+  if (!ctx.chat || ctx.chat.type === 'private') return next();
+
+  // --- группа / супергруппа / канал ---
+  const msg = ctx.message ?? ctx.editedMessage;
+  const text = msg && 'text' in msg ? String((msg as { text?: string }).text ?? '') : '';
+
+  if (text === '/chatid' || text.startsWith('/chatid@')) {
+    const title = 'title' in ctx.chat ? ctx.chat.title : '';
+    await ctx.reply(
+      `chat_id этой группы: ${ctx.chat.id}\n` +
+        `Пропишите TELEGRAM_CHAT_ID=${ctx.chat.id} в переменных бота на сервере и перезапустите.`,
+    );
+    console.log(`[group] /chatid в "${title}" → ${ctx.chat.id}`);
+    return;
+  }
+
+  if (!msg) return; // service-обновления (вступления/выходы и т.п.)
+
+  if (CHAT_ID == null) {
+    if (!seenChats.has(ctx.chat.id)) {
+      seenChats.add(ctx.chat.id);
+      const title = 'title' in ctx.chat ? ctx.chat.title : '';
+      console.log(
+        `[group] сообщение из чата ${ctx.chat.id} ("${title}"). TELEGRAM_CHAT_ID не задан — запись отключена. ` +
+          `Задайте TELEGRAM_CHAT_ID=${ctx.chat.id} чтобы включить.`,
+      );
+    }
+    return;
+  }
+  if (ctx.chat.id !== CHAT_ID) return;
+
+  const m = msg as unknown as Record<string, unknown> & { message_id: number; date: number };
+  try {
+    await db.from(tbl('raw_messages')).upsert(
+      {
+        id: `tg:${ctx.chat.id}:${m.message_id}`,
+        thread_id: (m.message_thread_id as number | undefined) ?? null,
+        author_tg_id: ctx.from?.id ?? null,
+        author_name: ctx.from
+          ? [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' ')
+          : null,
+        text: (m.text as string | undefined) ?? (m.caption as string | undefined) ?? null,
+        media: describeMedia(m),
+        posted_at: new Date(m.date * 1000).toISOString(),
+        ingested_from: 'bot_pull' as const,
+      },
+      { onConflict: 'id' },
+    );
+  } catch (e) {
+    console.warn('[raw_messages] ', e);
+  }
+
+  if (ctx.from && !ctx.from.is_bot) {
+    await reconcileFromChat(db, {
+      id: ctx.from.id,
+      username: ctx.from.username,
+      first_name: ctx.from.first_name,
+      last_name: ctx.from.last_name,
+    }).catch((e) => console.warn('[reconcile] ', e));
+  }
+  // намеренно не вызываем next() — личный кабинет в группах не нужен
+});
+
+// === Команды (только личка — см. middleware выше) ===
+
+bot.command('chatid', (ctx) => ctx.reply(`chat_id: ${ctx.chat.id}`));
 
 bot.start(async (ctx) => {
   const tgUser = ctx.from;
@@ -392,46 +478,10 @@ async function applyEditField(studentId: string, field: EditField, value: string
   await updateStudentField(getServiceClient(), studentId, patch);
 }
 
-// === Pull режим — слушаем чат курса ===
-
-const CHAT_ID = process.env.TELEGRAM_CHAT_ID ? Number(process.env.TELEGRAM_CHAT_ID) : null;
-if (CHAT_ID) {
-  bot.on('message', async (ctx, next) => {
-    if (ctx.chat.id !== CHAT_ID) return next();
-    const m = ctx.message as unknown as Record<string, unknown> & { message_id: number; date: number };
-    const text = (m.text as string | undefined) ?? (m.caption as string | undefined) ?? null;
-    const fromName = ctx.from
-      ? [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' ')
-      : null;
-    await db.from(tbl('raw_messages')).upsert(
-      {
-        id: `tg:${ctx.chat.id}:${m.message_id}`,
-        thread_id: (m.message_thread_id as number | undefined) ?? null,
-        author_tg_id: ctx.from?.id ?? null,
-        author_name: fromName,
-        text,
-        media: null,
-        posted_at: new Date(m.date * 1000).toISOString(),
-        ingested_from: 'bot_pull' as const,
-      },
-      { onConflict: 'id' },
-    );
-
-    // Пассивно дозаписываем username/tg_id импортированному профилю.
-    if (ctx.from && !ctx.from.is_bot) {
-      await reconcileFromChat(db, {
-        id: ctx.from.id,
-        username: ctx.from.username,
-        first_name: ctx.from.first_name,
-        last_name: ctx.from.last_name,
-      }).catch((e) => console.warn('[reconcile] ', e));
-    }
-    return next();
-  });
-}
-
 bot.launch();
-console.log('[bot] running. site=' + SITE_URL);
+console.log(
+  `[bot] running. site=${SITE_URL}  course_chat=${CHAT_ID ?? '(не задан — добавьте бота в группу и пришлите /chatid)'}`,
+);
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));

@@ -94,10 +94,23 @@ npm run dev --workspace=@web3nity/bot
 
 ### Bot (apps/bot)
 
-1. New Service → GitHub repo / Deploy from CLI
-2. Settings → Root directory: `/` (корень монорепо), Build → Dockerfile path: `apps/bot/Dockerfile`
-3. Variables: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `COHORT`, `SITE_URL`
-4. Deploy. Бот запускается по long-polling, public URL не нужен.
+Подготовка бота:
+1. @BotFather → `/newbot` → имя → username → получить `TELEGRAM_BOT_TOKEN`.
+2. @BotFather → `/setprivacy` → выбрать бота → **Disable** (иначе бот не видит обычные сообщения в группе, только команды/упоминания — фоновое чтение не заработает).
+3. Деплой (см. ниже) с `TELEGRAM_BOT_TOKEN` и `SUPABASE_SERVICE_ROLE_KEY`, `TELEGRAM_CHAT_ID` пока можно не задавать.
+4. Добавить бота в группу курса (достаточно обычным участником; админом — если захотите ещё и удаление сообщений и т.п.).
+5. В группе написать `/chatid` — бот ответит chat_id. Прописать его в `TELEGRAM_CHAT_ID` и перезапустить сервис.
+
+Деплой на Railway:
+1. New Service → Deploy from repo / CLI (`railway up`).
+2. Settings → Root directory: `/` (корень монорепо), Build → Dockerfile path: `apps/bot/Dockerfile`.
+3. Variables: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (после шага 5 выше), `COHORT`, `SITE_URL`, при необходимости `SUPABASE_TABLE_PREFIX` / `SUPABASE_BUCKET_PREFIX`.
+4. Long-polling, public URL не нужен.
+
+Что бот делает в группе (фоновый режим):
+- пишет каждое сообщение в `web3nity_raw_messages` (аудит + возможность переклассификации);
+- дозаписывает `telegram_user_id` / `telegram_username` импортированному профилю по совпадению имени (только если совпадение единственное) — `reconcileFromChat`;
+- ничего не публикует и не создаёт пассивно; личный кабинет (`/start /edit /work_add ...`) работает только в личке с ботом.
 
 ### Web (apps/web)
 
