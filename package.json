@@ -9,6 +9,8 @@
   "scripts": {
     "import": "tsx scripts/import.ts",
     "import:dry": "tsx scripts/import.ts --dry-run",
+    "recommend": "tsx scripts/recommend.ts",
+    "recommend:dry": "tsx scripts/recommend.ts --dry",
     "test": "vitest run",
     "test:parser": "vitest run --dir packages/parser",
     "typecheck": "tsc -b"

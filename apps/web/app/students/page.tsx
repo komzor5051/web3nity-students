@@ -1,8 +1,8 @@
 import { supabase, studentSlug, tbl, type StudentRow } from '@/lib/db';
-import { getCurrentStudent } from '@/lib/auth';
+import { getCurrentStudent, serviceClient } from '@/lib/auth';
 import Directory, { type DirItem } from './directory';
 
-export const revalidate = 60;
+export const dynamic = 'force-dynamic';
 
 export default async function StudentsPage() {
   const { data, error } = await supabase
@@ -20,6 +20,15 @@ export default async function StudentsPage() {
   const me = await getCurrentStudent().catch(() => null);
   const myId = me?.id ?? null;
 
+  let recCount = 0;
+  if (myId) {
+    const { count } = await serviceClient()
+      .from(tbl('recommendations'))
+      .select('recommended_id', { count: 'exact', head: true })
+      .eq('student_id', myId);
+    recCount = count ?? 0;
+  }
+
   const items: DirItem[] = list.map((s) => ({
     id: s.id,
     slug: studentSlug(s),
@@ -36,7 +45,7 @@ export default async function StudentsPage() {
     avatarUrl: s.avatar_url,
   }));
 
-  return <Directory items={items} myId={myId} />;
+  return <Directory items={items} myId={myId} recCount={recCount} />;
 }
 
 const REGION_MAP: Record<string, string> = {

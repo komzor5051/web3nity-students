@@ -69,3 +69,11 @@ export interface Tag {
   label: string;
   type: 'niche' | 'skill' | 'work_category';
 }
+
+export interface Recommendation {
+  student_id: string;
+  recommended_id: string;
+  reason: string | null;
+  rank: number;
+  created_at: string;
+}

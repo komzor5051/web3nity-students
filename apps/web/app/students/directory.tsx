@@ -52,7 +52,15 @@ function statusColor(s: DirItem['status']): { dot: string; text: string } {
   return { dot: 'bg-text3', text: 'text-text3' };
 }
 
-export default function Directory({ items, myId }: { items: DirItem[]; myId: string | null }) {
+export default function Directory({
+  items,
+  myId,
+  recCount = 0,
+}: {
+  items: DirItem[];
+  myId: string | null;
+  recCount?: number;
+}) {
   const [status, setStatus] = useState<StatusKey>('all');
   const [niche, setNiche] = useState<string>('all');
   const [region, setRegion] = useState<string>('Все');
@@ -108,6 +116,8 @@ export default function Directory({ items, myId }: { items: DirItem[]; myId: str
           <StatBadge color="bg-blue" label={`${stats.niches} сфер`} />
         </div>
       </section>
+
+      {recCount > 0 && <RecBanner count={recCount} />}
 
       <div className="flex items-center justify-between mb-3.5">
         <h2 className="font-display text-[20px]">Все участники</h2>
@@ -172,6 +182,42 @@ export default function Directory({ items, myId }: { items: DirItem[]; myId: str
 
       {opened && <Modal item={opened} onClose={() => setOpenId(null)} />}
     </div>
+  );
+}
+
+function recPlural(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 14) return 'рекомендаций';
+  if (mod10 === 1) return 'рекомендация';
+  if (mod10 >= 2 && mod10 <= 4) return 'рекомендации';
+  return 'рекомендаций';
+}
+
+function RecBanner({ count }: { count: number }) {
+  return (
+    <Link
+      href="/recommendations"
+      className="group flex items-center gap-4 mb-6 p-4 rounded-lg border border-accent-light bg-accent-light/60 hover:bg-accent-light transition-colors"
+    >
+      <span className="shrink-0 w-12 h-12 rounded-[12px] bg-accent flex items-center justify-center text-white">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 2.5l1.9 4.8 4.8 1.9-4.8 1.9L12 16l-1.9-4.9-4.8-1.9 4.8-1.9z" />
+          <path d="M18.5 14l.9 2.3 2.3.9-2.3.9-.9 2.3-.9-2.3-2.3-.9 2.3-.9z" />
+        </svg>
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="font-semibold text-[15px] text-ink">
+          {count} {recPlural(count)} для вас
+        </div>
+        <div className="text-[13px] text-text2">
+          Мы подобрали людей, с которыми вам стоит познакомиться
+        </div>
+      </div>
+      <span className="shrink-0 text-accent text-xl group-hover:translate-x-0.5 transition-transform">
+        →
+      </span>
+    </Link>
   );
 }
 
