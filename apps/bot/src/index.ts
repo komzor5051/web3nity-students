@@ -509,10 +509,32 @@ async function applyEditField(studentId: string, field: EditField, value: string
   await updateStudentField(getServiceClient(), studentId, patch);
 }
 
-bot.launch();
-console.log(
-  `[bot] running. site=${SITE_URL}  course_chat=${CHAT_ID ?? '(не задан — добавьте бота в группу и пришлите /chatid)'}`,
-);
+// launch с graceful-ретраем.
+//
+// При перевыкатке на Railway новый контейнер ненадолго пересекается со старым —
+// оба зовут getUpdates, Telegram отвечает 409 ("terminated by other getUpdates").
+// Без обработки промис launch() реджектится, процесс падает и Railway уводит
+// сервис в рестарт-петлю. Здесь 409 — не фатал: ждём и пробуем снова, пока
+// старый инстанс не отвалится.
+function launchWithRetry(attempt = 0): void {
+  bot
+    .launch(() => {
+      console.log(
+        `[bot] running. site=${SITE_URL}  course_chat=${
+          CHAT_ID ?? '(не задан — добавьте бота в группу и пришлите /chatid)'
+        }`,
+      );
+    })
+    .catch((e: unknown) => {
+      const msg = e instanceof Error ? e.message : String(e);
+      const is409 = /409/.test(msg) || /terminated by other getUpdates/.test(msg);
+      const delayMs = is409 ? 15_000 : 5_000;
+      console.warn(`[bot] launch failed (attempt ${attempt + 1}): ${msg}. retry in ${delayMs}ms`);
+      setTimeout(() => launchWithRetry(attempt + 1), delayMs);
+    });
+}
+
+launchWithRetry();
 
 // === Авто-сборка профилей из сообщений группы ===
 //
