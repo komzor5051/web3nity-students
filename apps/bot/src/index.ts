@@ -50,15 +50,14 @@ bot.use(async (ctx, next) => {
   if (!ctx.chat || ctx.chat.type === 'private') return next();
 
   // --- группа / супергруппа / канал ---
+  // Бот в группе работает только на чтение: ничего не отправляет, не отвечает,
+  // не реагирует. Любой исходящий вызов здесь запрещён by design.
   const msg = ctx.message ?? ctx.editedMessage;
   const text = msg && 'text' in msg ? String((msg as { text?: string }).text ?? '') : '';
 
   if (text === '/chatid' || text.startsWith('/chatid@')) {
+    // Не отвечаем в группу — chat_id уходит только в логи сервиса (Railway).
     const title = 'title' in ctx.chat ? ctx.chat.title : '';
-    await ctx.reply(
-      `chat_id этой группы: ${ctx.chat.id}\n` +
-        `Пропишите TELEGRAM_CHAT_ID=${ctx.chat.id} в переменных бота на сервере и перезапустите.`,
-    );
     console.log(`[group] /chatid в "${title}" → ${ctx.chat.id}`);
     return;
   }
