@@ -19,6 +19,6 @@
       "@web3nity/parser": ["./packages/parser/src/index.ts"]
     }
   },
-  "include": ["packages/**/*.ts", "apps/**/*.ts", "scripts/**/*.ts"],
-  "exclude": ["node_modules", "**/dist", "**/.next"]
+  "include": ["packages/**/*.ts", "apps/bot/**/*.ts", "scripts/**/*.ts"],
+  "exclude": ["node_modules", "**/dist", "**/.next", "apps/web"]
 }

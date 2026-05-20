@@ -39,6 +39,7 @@ export type StudentRow = {
   telegram_username: string | null;
   cohort: string;
   import_key: string | null;
+  is_published: boolean;
   updated_at: string;
 };
 

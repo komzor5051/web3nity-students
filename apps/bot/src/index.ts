@@ -123,6 +123,36 @@ bot.start(async (ctx) => {
     last_name: tgUser.last_name,
   });
 
+  // Deep-link web-login: /start auth_<token>
+  // payload берётся из ctx.startPayload (telegraf раскладывает /start <payload>).
+  const payload = (ctx as unknown as { startPayload?: string }).startPayload ?? '';
+  if (payload.startsWith('auth_')) {
+    const token = payload.slice('auth_'.length);
+    const upd = await db
+      .from(tbl('web_auth_tokens'))
+      .update({
+        telegram_user_id: tgUser.id,
+        student_id: student.id,
+        confirmed_at: new Date().toISOString(),
+      })
+      .eq('token', token)
+      .is('confirmed_at', null)
+      .gt('expires_at', new Date().toISOString())
+      .select('token')
+      .maybeSingle();
+    if (upd.data) {
+      await ctx.reply(
+        `Готово, ${student.display_name}. Вернись на сайт — ты уже залогинен.\n\n` +
+          `Управление профилем здесь, в боте: /profile /edit /work_add /help`,
+      );
+      return;
+    }
+    await ctx.reply(
+      'Ссылка для входа на сайт устарела или уже использована. Открой /login на сайте заново.',
+    );
+    return;
+  }
+
   if (!student.is_published) {
     await setSession(db, tgUser.id, { kind: 'awaiting_consent' });
     await ctx.reply(

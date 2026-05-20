@@ -3,14 +3,25 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 html, body {
-  background: #0F0F0F;
-  color: #F5EFE5;
-  font-family: Manrope, Inter, system-ui, sans-serif;
+  background: #FAFAF8;
+  color: #1A1A18;
+  font-family: 'DM Sans', Manrope, Inter, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
 }
 
-::selection { background: #E94E1B; color: #F5EFE5; }
+::selection { background: #E85A2A; color: #FFFFFF; }
+
+@keyframes w3n-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.w3n-card-anim {
+  animation: w3n-fade-up .3s ease forwards;
+  opacity: 0;
+}

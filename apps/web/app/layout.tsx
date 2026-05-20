@@ -1,5 +1,7 @@
 import './globals.css';
 import type { Metadata } from 'next';
+import Link from 'next/link';
+import { getCurrentStudent } from '@/lib/auth';
 
 export const metadata: Metadata = {
   title: 'Студенты — AI-Ассистенты 3.0',
@@ -11,30 +13,50 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const me = await getCurrentStudent().catch(() => null);
+  const initial = me?.display_name?.[0]?.toUpperCase() ?? '?';
+
   return (
     <html lang="ru">
-      <body className="min-h-screen">
-        <header className="border-b border-line">
-          <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
-            <a href="/" className="text-cream font-bold tracking-tight uppercase text-lg">
-              Web3nity / Students
-            </a>
-            <a
-              href="https://ai-education.io"
-              className="text-muted hover:text-cream text-sm uppercase tracking-wider"
-            >
-              ai-education.io
-            </a>
+      <head>
+        <link
+          href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300..700&family=Playfair+Display:wght@600;700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body className="min-h-screen bg-bg text-ink">
+        <header className="bg-surface border-b border-line h-[58px] px-6 sm:px-10 flex items-center justify-between sticky top-0 z-30">
+          <Link href="/students" className="flex items-center gap-2 font-bold text-[13px] tracking-[.5px]">
+            <span className="w-7 h-7 bg-accent rounded-[7px] flex items-center justify-center text-white text-[12px]">W</span>
+            AI-АССИСТЕНТЫ 3.0
+          </Link>
+          <div className="flex items-center gap-3 text-[13px] text-text2">
+            {me ? (
+              <>
+                <Link href="/profile" className="flex items-center gap-2 hover:text-ink">
+                  <span className="w-[30px] h-[30px] rounded-full bg-accent text-white font-semibold text-xs flex items-center justify-center">
+                    {initial}
+                  </span>
+                  <span className="hidden sm:inline">{me.display_name}</span>
+                </Link>
+                <form action="/api/auth/logout" method="POST">
+                  <button className="text-[11px] text-text3 underline underline-offset-2 hover:text-accent">
+                    выйти
+                  </button>
+                </form>
+              </>
+            ) : (
+              <Link
+                href="/login"
+                className="px-3 py-1.5 rounded-full border border-line hover:border-accent hover:text-accent text-[12px]"
+              >
+                Войти через Telegram
+              </Link>
+            )}
           </div>
         </header>
         <main>{children}</main>
-        <footer className="border-t border-line mt-24">
-          <div className="max-w-6xl mx-auto px-6 py-8 text-muted text-sm flex items-center justify-between">
-            <span>Курс «AI-Ассистенты 3.0»</span>
-            <span>© Web3nity</span>
-          </div>
-        </footer>
       </body>
     </html>
   );
