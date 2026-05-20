@@ -16,6 +16,7 @@ import {
   deleteStudent,
   reconcileFromChat,
 } from './students.js';
+import { reconcileProfiles } from './reconcile-profiles.js';
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 if (!TOKEN) throw new Error('TELEGRAM_BOT_TOKEN is required');
@@ -512,6 +513,29 @@ bot.launch();
 console.log(
   `[bot] running. site=${SITE_URL}  course_chat=${CHAT_ID ?? '(не задан — добавьте бота в группу и пришлите /chatid)'}`,
 );
+
+// === Авто-сборка профилей из сообщений группы ===
+//
+// Раз в RECONCILE_INTERVAL_MS бот разбирает новые сообщения чата курса через
+// LLM и сам раскладывает их по профилям и работам — студенту не нужно
+// заполнять профиль вручную. Работает только когда задан TELEGRAM_CHAT_ID
+// (иначе raw_messages пуст и разбирать нечего).
+
+const RECONCILE_INTERVAL_MS = 15 * 60 * 1000;
+
+async function runReconcile(): Promise<void> {
+  try {
+    const r = await reconcileProfiles(db);
+    if (r.intros || r.works) {
+      console.log(`[reconcile] fetched=${r.fetched} intros=${r.intros} works=${r.works}`);
+    }
+  } catch (e) {
+    console.warn('[reconcile] ', e);
+  }
+}
+
+setTimeout(runReconcile, 30_000);
+setInterval(runReconcile, RECONCILE_INTERVAL_MS);
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
