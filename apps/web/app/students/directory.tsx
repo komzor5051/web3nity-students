@@ -11,6 +11,7 @@ export type DirItem = {
   country: string | null;
   region: string | null;
   niche: string | null;
+  sphere: string | null;
   bio: string | null;
   goal: string | null;
   status: 'looking_for_clients' | 'looking_for_partners' | 'just_learning' | null;
@@ -62,21 +63,21 @@ export default function Directory({
   recCount?: number;
 }) {
   const [status, setStatus] = useState<StatusKey>('all');
-  const [niche, setNiche] = useState<string>('all');
+  const [sphere, setSphere] = useState<string>('all');
   const [region, setRegion] = useState<string>('Все');
   const [q, setQ] = useState<string>('');
   const [openId, setOpenId] = useState<string | null>(null);
 
-  const niches = useMemo(() => {
+  const spheres = useMemo(() => {
     const set = new Set<string>();
-    for (const i of items) if (i.niche) set.add(i.niche);
+    for (const i of items) if (i.sphere) set.add(i.sphere);
     return ['all', ...Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'))];
   }, [items]);
 
   const stats = useMemo(() => {
     const countries = new Set(items.map((i) => i.country).filter(Boolean) as string[]);
-    const niches = new Set(items.map((i) => i.niche).filter(Boolean) as string[]);
-    return { total: items.length, countries: countries.size, niches: niches.size };
+    const set = new Set(items.map((i) => i.sphere).filter(Boolean) as string[]);
+    return { total: items.length, countries: countries.size, spheres: set.size };
   }, [items]);
 
   const filtered = useMemo(() => {
@@ -87,10 +88,10 @@ export default function Directory({
         const k = statusKey(i.status);
         if (k !== status) return false;
       }
-      if (niche !== 'all' && i.niche !== niche) return false;
+      if (sphere !== 'all' && i.sphere !== sphere) return false;
       if (region !== 'Все' && i.region !== region) return false;
       if (term) {
-        const hay = [i.name, i.niche, i.city, i.country, i.bio]
+        const hay = [i.name, i.niche, i.sphere, i.city, i.country, i.bio]
           .filter(Boolean)
           .join(' ')
           .toLowerCase();
@@ -98,12 +99,12 @@ export default function Directory({
       }
       return true;
     });
-  }, [items, status, niche, region, q, myId]);
+  }, [items, status, sphere, region, q, myId]);
 
   const opened = openId ? items.find((i) => i.id === openId) ?? null : null;
 
   return (
-    <div className="max-w-[1260px] mx-auto px-6 sm:px-10 py-7">
+    <div className="max-w-[1260px] mx-auto px-6 sm:px-10 py-7 overflow-x-clip">
       <section className="mb-6">
         <h1 className="font-display text-[28px] mb-1.5">Участники курса Web3nity</h1>
         <p className="text-text2 text-sm">
@@ -113,7 +114,7 @@ export default function Directory({
         <div className="flex flex-wrap gap-4 mt-2.5 text-[13px] text-text3">
           <StatBadge color="bg-accent" label={`${stats.total} участник${plural(stats.total)}`} />
           <StatBadge color="bg-green" label={`${stats.countries} стран`} />
-          <StatBadge color="bg-blue" label={`${stats.niches} сфер`} />
+          <StatBadge color="bg-blue" label={`${stats.spheres} сфер`} />
         </div>
       </section>
 
@@ -146,9 +147,9 @@ export default function Directory({
         <Separator />
 
         <FilterGroup label="Сфера">
-          {niches.map((n) => (
-            <Chip key={n} active={niche === n} onClick={() => setNiche(n)}>
-              {n === 'all' ? 'Все' : n}
+          {spheres.map((s) => (
+            <Chip key={s} active={sphere === s} onClick={() => setSphere(s)}>
+              {s === 'all' ? 'Все' : s}
             </Chip>
           ))}
         </FilterGroup>
@@ -308,10 +309,10 @@ function Card({ item, index, onOpen }: { item: DirItem; index: number; onOpen: (
       {item.bio && (
         <p className="text-[12px] text-text2 leading-[1.5] mb-2.5 line-clamp-2">{item.bio}</p>
       )}
-      {item.niche && (
-        <div className="flex gap-1 flex-wrap mb-2.5">
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-tag-bg text-tag-text">
-            {item.niche}
+      {item.sphere && (
+        <div className="mb-2.5">
+          <span className="inline-block max-w-full truncate align-bottom px-2 py-0.5 rounded-full text-[10px] font-medium bg-tag-bg text-tag-text">
+            {item.sphere}
           </span>
         </div>
       )}
@@ -406,20 +407,21 @@ function Modal({ item, onClose }: { item: DirItem; onClose: () => void }) {
             <h2 className="font-display text-[20px] mb-0.5">{item.name}</h2>
             <div className="text-[13px] text-text2">
               {[item.city, item.country].filter(Boolean).join(', ')}
-              {item.niche ? ` · ${item.niche}` : ''}
+              {item.sphere ? ` · ${item.sphere}` : ''}
             </div>
           </div>
         </div>
         <div className="px-6 py-5">
           {item.bio && <Section title="О себе">{item.bio}</Section>}
           {item.goal && <Section title="Цель на курсе">{item.goal}</Section>}
-          {item.niche && (
+          {item.niche && <Section title="Специализация">{item.niche}</Section>}
+          {item.sphere && (
             <div className="mb-4">
               <h4 className="text-[10px] uppercase tracking-[.8px] text-text3 mb-1.5 font-medium">
                 Сфера
               </h4>
-              <span className="inline-block px-3 py-1 rounded-full text-[12px] bg-tag-bg text-tag-text">
-                {item.niche}
+              <span className="inline-block max-w-full break-words px-3 py-1 rounded-full bg-tag-bg text-tag-text text-[12px]">
+                {item.sphere}
               </span>
             </div>
           )}

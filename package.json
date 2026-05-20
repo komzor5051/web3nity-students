@@ -11,6 +11,8 @@
     "import:dry": "tsx scripts/import.ts --dry-run",
     "recommend": "tsx scripts/recommend.ts",
     "recommend:dry": "tsx scripts/recommend.ts --dry",
+    "spheres": "tsx scripts/spheres.ts",
+    "spheres:dry": "tsx scripts/spheres.ts --dry",
     "test": "vitest run",
     "test:parser": "vitest run --dir packages/parser",
     "typecheck": "tsc -b"

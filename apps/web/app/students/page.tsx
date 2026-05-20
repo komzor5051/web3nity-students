@@ -8,7 +8,7 @@ export default async function StudentsPage() {
   const { data, error } = await supabase
     .from(tbl('students'))
     .select(
-      'id,display_name,avatar_url,city,country,niche,bio,goal,status,telegram_username,import_key,updated_at',
+      'id,display_name,avatar_url,city,country,niche,sphere,bio,goal,status,telegram_username,import_key,updated_at',
     )
     .eq('is_published', true)
     .order('updated_at', { ascending: false })
@@ -37,6 +37,7 @@ export default async function StudentsPage() {
     country: s.country,
     region: regionOf(s.country),
     niche: s.niche,
+    sphere: s.sphere,
     bio: s.bio,
     goal: s.goal,
     status: s.status,

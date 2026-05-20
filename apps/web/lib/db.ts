@@ -30,6 +30,7 @@ export type StudentRow = {
   city: string | null;
   country: string | null;
   niche: string | null;
+  sphere: string | null;
   bio: string | null;
   goal: string | null;
   expertise: string | null;
