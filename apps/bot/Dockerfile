@@ -1,5 +1,6 @@
 # Build context = repo root (web3nity-students/).
-FROM node:20-alpine
+# Node 22: нужен нативный WebSocket для @supabase/supabase-js realtime-клиента.
+FROM node:22-alpine
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
