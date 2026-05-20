@@ -30,47 +30,59 @@ type ProfileRow = Pick<
   | 'expertise'
   | 'hobbies'
   | 'status'
+  | 'is_published'
 >;
+
+function toRosterEntry(s: ProfileRow, idx: number): RosterEntry {
+  return {
+    idx,
+    name: s.display_name,
+    niche: s.niche ?? undefined,
+    city: s.city ?? undefined,
+    country: s.country ?? undefined,
+    bio: s.bio ?? undefined,
+    goal: s.goal ?? undefined,
+    expertise: s.expertise ?? undefined,
+    hobbies: s.hobbies ?? undefined,
+    status: s.status ?? undefined,
+  };
+}
 
 async function main(): Promise<void> {
   const db = getServiceClient();
 
-  // 1. Все опубликованные участники — и кандидаты, и цели рекомендаций.
+  // 1. Все участники. Рекомендации генерируем для каждого (в т.ч. ещё не
+  //    опубликованных — чтобы новый вошедший сразу видел подборку), а
+  //    рекомендуем только опубликованных (их видно на витрине).
   const { data, error } = await db
     .from(tbl('students'))
-    .select('id, display_name, niche, city, country, bio, goal, expertise, hobbies, status')
-    .eq('is_published', true);
+    .select(
+      'id, display_name, niche, city, country, bio, goal, expertise, hobbies, status, is_published',
+    );
   if (error) throw error;
   const students = (data ?? []) as ProfileRow[];
-  console.log(`[recommend] участников: ${students.length}`);
-  if (students.length < 3) {
-    console.log('[recommend] слишком мало участников — нечего рекомендовать.');
+  const published = students.filter((s) => s.is_published);
+  console.log(`[recommend] участников: ${students.length} (опубликовано: ${published.length})`);
+  if (published.length < 3) {
+    console.log('[recommend] слишком мало опубликованных профилей — нечего рекомендовать.');
     return;
   }
 
-  // 2. Ростер с числовыми idx (LLM оперирует индексами, не UUID).
-  const idById = new Map<string, number>();
+  // 2. Единое idx-пространство для всех участников (LLM оперирует индексами).
   const byIdx = new Map<number, ProfileRow>();
-  const roster: RosterEntry[] = students.map((s, idx) => {
-    idById.set(s.id, idx);
-    byIdx.set(idx, s);
-    return {
-      idx,
-      name: s.display_name,
-      niche: s.niche ?? undefined,
-      city: s.city ?? undefined,
-      country: s.country ?? undefined,
-      bio: s.bio ?? undefined,
-      goal: s.goal ?? undefined,
-      expertise: s.expertise ?? undefined,
-      hobbies: s.hobbies ?? undefined,
-      status: s.status ?? undefined,
-    };
+  students.forEach((s, idx) => byIdx.set(idx, s));
+
+  const roster: RosterEntry[] = [];
+  const targets: RosterEntry[] = [];
+  students.forEach((s, idx) => {
+    const entry = toRosterEntry(s, idx);
+    targets.push(entry);
+    if (s.is_published) roster.push(entry);
   });
 
   // 3. LLM.
   console.log('[recommend] запрос к LLM...');
-  const result = await recommendConnections(roster, {
+  const result = await recommendConnections(roster, targets, {
     onBatch: (done, total) => process.stdout.write(`\r[recommend] ${done}/${total}`),
   });
   process.stdout.write('\n');

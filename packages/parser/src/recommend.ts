@@ -77,8 +77,14 @@ export interface RecommendConfig {
   onBatch?: (done: number, total: number) => void;
 }
 
+/**
+ * @param roster  кандидаты, которых можно рекомендовать (только опубликованные).
+ * @param targets участники, для которых генерируем рекомендации (могут быть и
+ *                неопубликованные — например, только что вошедшие на сайт).
+ */
 export async function recommendConnections(
   roster: RosterEntry[],
+  targets: RosterEntry[],
   config: RecommendConfig = {},
 ): Promise<RecommendationOut[]> {
   const apiKey = config.apiKey ?? process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY;
@@ -100,14 +106,22 @@ export async function recommendConnections(
     },
   });
 
-  const validIdx = new Set(roster.map((r) => r.idx));
+  const recommendableIdx = new Set(roster.map((r) => r.idx));
+  const targetIdx = new Set(targets.map((t) => t.idx));
   const out: RecommendationOut[] = [];
 
-  for (let i = 0; i < roster.length; i += batchSize) {
-    const targets = roster.slice(i, i + batchSize);
-    const batch = await recommendBatch(model, roster, targets, maxRetries, validIdx);
+  for (let i = 0; i < targets.length; i += batchSize) {
+    const batchTargets = targets.slice(i, i + batchSize);
+    const batch = await recommendBatch(
+      model,
+      roster,
+      batchTargets,
+      maxRetries,
+      recommendableIdx,
+      targetIdx,
+    );
     out.push(...batch);
-    config.onBatch?.(Math.min(i + batchSize, roster.length), roster.length);
+    config.onBatch?.(Math.min(i + batchSize, targets.length), targets.length);
   }
   return out;
 }
@@ -117,7 +131,8 @@ async function recommendBatch(
   roster: RosterEntry[],
   targets: RosterEntry[],
   maxRetries: number,
-  validIdx: Set<number>,
+  recommendableIdx: Set<number>,
+  targetIdx: Set<number>,
 ): Promise<RecommendationOut[]> {
   const prompt = `СПИСОК ВСЕХ УЧАСТНИКОВ (можно рекомендовать только из них, по полю idx):
 ${JSON.stringify(roster, null, 1)}
@@ -133,7 +148,7 @@ ${JSON.stringify(targets.map((t) => t.idx))}
       const response = await model.generateContent(prompt);
       const parsed = JSON.parse(response.response.text());
       if (!Array.isArray(parsed)) throw new Error('response is not an array');
-      return sanitize(parsed, validIdx);
+      return sanitize(parsed, recommendableIdx, targetIdx);
     } catch (e) {
       lastError = e;
       if (attempt === maxRetries) break;
@@ -142,11 +157,15 @@ ${JSON.stringify(targets.map((t) => t.idx))}
   throw new Error(`recommendBatch failed: ${String(lastError)}`);
 }
 
-function sanitize(parsed: unknown[], validIdx: Set<number>): RecommendationOut[] {
+function sanitize(
+  parsed: unknown[],
+  recommendableIdx: Set<number>,
+  targetIdx: Set<number>,
+): RecommendationOut[] {
   const out: RecommendationOut[] = [];
   for (const raw of parsed) {
     const item = raw as Record<string, unknown>;
-    if (typeof item.idx !== 'number' || !validIdx.has(item.idx)) continue;
+    if (typeof item.idx !== 'number' || !targetIdx.has(item.idx)) continue;
     const recsRaw = Array.isArray(item.recs) ? item.recs : [];
     const seen = new Set<number>();
     const recs: RecommendationOut['recs'] = [];
@@ -154,7 +173,7 @@ function sanitize(parsed: unknown[], validIdx: Set<number>): RecommendationOut[]
       const rec = r as Record<string, unknown>;
       const ridx = rec.recommended_idx;
       const reason = rec.reason;
-      if (typeof ridx !== 'number' || ridx === item.idx || !validIdx.has(ridx)) continue;
+      if (typeof ridx !== 'number' || ridx === item.idx || !recommendableIdx.has(ridx)) continue;
       if (seen.has(ridx)) continue;
       seen.add(ridx);
       recs.push({
