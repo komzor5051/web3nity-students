@@ -2,7 +2,10 @@ import { serviceClient } from './auth';
 
 /** Публичный бакет для медиа работ (см. packages/db bucket('works-media')). */
 const BUCKET = 'web3nity-works-media';
+/** Публичный бакет для аватаров профиля. */
+const AVATAR_BUCKET = 'web3nity-students-avatars';
 const MAX_BYTES = 15 * 1024 * 1024;
+const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
 
 export type MediaItem = {
   type: 'image' | 'video' | 'pdf' | 'link';
@@ -56,4 +59,30 @@ export async function uploadWorkMedia(
 
   const { data } = svc.storage.from(BUCKET).getPublicUrl(key);
   return { type: mediaType(ext), url: data.publicUrl, caption: file.name };
+}
+
+/**
+ * Загружает аватар студента и возвращает публичный URL.
+ * Принимает только картинки до AVATAR_MAX_BYTES.
+ */
+export async function uploadAvatar(
+  studentId: string,
+  file: File,
+): Promise<string | null> {
+  if (file.size === 0 || file.size > AVATAR_MAX_BYTES) return null;
+  const ext = (file.name.split('.').pop() ?? '').toLowerCase();
+  if (!IMAGE_EXT.includes(ext)) return null;
+
+  const key = `${studentId}/avatar-${Date.now()}.${ext}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const svc = serviceClient();
+  const { error } = await svc.storage.from(AVATAR_BUCKET).upload(key, buffer, {
+    contentType: file.type || `image/${ext}`,
+    upsert: true,
+  });
+  if (error) {
+    console.warn('[storage] avatar upload failed:', error.message);
+    return null;
+  }
+  return svc.storage.from(AVATAR_BUCKET).getPublicUrl(key).data.publicUrl;
 }

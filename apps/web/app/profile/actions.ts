@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { getCurrentStudent, serviceClient } from '@/lib/auth';
 import { tbl } from '@/lib/db';
-import { uploadWorkMedia, type MediaItem } from '@/lib/storage';
+import { uploadAvatar, uploadWorkMedia, type MediaItem } from '@/lib/storage';
 
 const STATUSES = ['looking_for_clients', 'looking_for_partners', 'just_learning'];
 
@@ -43,6 +43,28 @@ export async function updateProfile(_prev: ActionResult | null, form: FormData):
   const { error } = await serviceClient().from(tbl('students')).update(patch).eq('id', me.id);
   if (error) return { ok: false, error: error.message };
   revalidatePath('/profile');
+  return { ok: true };
+}
+
+/** Загрузить / поменять аватар профиля. */
+export async function updateAvatar(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
+  const me = await getCurrentStudent().catch(() => null);
+  if (!me) return { ok: false, error: 'Сессия истекла — войдите заново.' };
+
+  const file = form.get('avatar');
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: 'Выберите файл с фото.' };
+  }
+  const url = await uploadAvatar(me.id, file);
+  if (!url) return { ok: false, error: 'Не удалось загрузить фото (только JPG/PNG/WebP до 5 МБ).' };
+
+  const { error } = await serviceClient()
+    .from(tbl('students'))
+    .update({ avatar_url: url })
+    .eq('id', me.id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath('/profile');
+  revalidatePath('/students');
   return { ok: true };
 }
 

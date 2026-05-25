@@ -104,7 +104,7 @@ export default function WorksSection({ works }: { works: WorkRow[] }) {
     <div className="bg-surface border border-line rounded-lg p-6">
       <h2 className="font-display text-xl mb-1">Мои проекты</h2>
       <p className="text-text3 text-sm mb-5">
-        Добавляйте кейсы и работы — они появятся на вашей публичной странице.
+        Добавляйте кейсы и работы, сделанные после прохождения курсов Web3nity. Они появятся на вашей публичной странице.
       </p>
 
       {works.length > 0 ? (

@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getCurrentStudent, serviceClient, botUsername } from '@/lib/auth';
 import { studentSlug, tbl, type WorkRow } from '@/lib/db';
-import { Avatar } from '@/lib/components';
+import AvatarUploader from './avatar-uploader';
 import ProfileEditor from './profile-editor';
 import WorksSection from './works-section';
 
@@ -25,7 +25,7 @@ export default async function ProfilePage() {
   return (
     <div className="max-w-2xl mx-auto px-6 py-10 space-y-6">
       <div className="flex items-start gap-4">
-        <Avatar name={me.display_name} url={me.avatar_url} />
+        <AvatarUploader name={me.display_name} url={me.avatar_url} />
         <div className="min-w-0 flex-1">
           <h1 className="font-display text-2xl">{me.display_name}</h1>
           <div className="text-text2 text-sm">

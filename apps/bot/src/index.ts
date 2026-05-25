@@ -282,7 +282,11 @@ bot.action(/^status:(.+)$/, async (ctx) => {
 bot.command('work_add', async (ctx) => {
   if (!ctx.from) return;
   await setSession(db, ctx.from.id, { kind: 'work_title' });
-  await ctx.reply('Заголовок работы (3-7 слов)?');
+  await ctx.reply(
+    'Добавим проект — работу, которую ты сделал после прохождения курсов Web3nity. ' +
+      'Появится на твоей публичной странице.\n\n' +
+      'Название проекта (3-7 слов)?',
+  );
 });
 
 bot.command('works', async (ctx) => {
@@ -325,7 +329,7 @@ bot.on(message('text'), async (ctx) => {
     }
     case 'work_title': {
       await setSession(db, ctx.from.id, { kind: 'work_description', title: text });
-      await ctx.reply('Опиши кейс в 1-3 предложениях.');
+      await ctx.reply('Опиши проект в 1-3 предложениях: что сделал, какой результат, какие инструменты.');
       return;
     }
     case 'work_description': {

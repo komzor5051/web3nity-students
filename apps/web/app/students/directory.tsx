@@ -69,9 +69,20 @@ export default function Directory({
   const [openId, setOpenId] = useState<string | null>(null);
 
   const spheres = useMemo(() => {
-    const set = new Set<string>();
-    for (const i of items) if (i.sphere) set.add(i.sphere);
-    return ['all', ...Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'))];
+    // Только короткие и реально общие категории — длинные описательные «сферы»
+    // (вроде «мастер цигун» или «продажа недвижимости под ВНЖ») как фильтр
+    // бесполезны: у каждого человека своя, искать по ним невозможно.
+    const counts = new Map<string, number>();
+    for (const i of items) {
+      if (!i.sphere) continue;
+      if (i.sphere.length > 30) continue;
+      counts.set(i.sphere, (counts.get(i.sphere) ?? 0) + 1);
+    }
+    const shared = Array.from(counts.entries())
+      .filter(([, n]) => n >= 2)
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ru'))
+      .map(([s]) => s);
+    return ['all', ...shared];
   }, [items]);
 
   const stats = useMemo(() => {
@@ -83,7 +94,6 @@ export default function Directory({
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     return items.filter((i) => {
-      if (myId && i.id === myId) return false;
       if (status !== 'all') {
         const k = statusKey(i.status);
         if (k !== status) return false;
@@ -135,7 +145,7 @@ export default function Directory({
         />
       </div>
 
-      <div className="flex flex-wrap gap-2 items-center mb-5">
+      <div className="flex flex-col gap-3 mb-5">
         <FilterGroup label="Статус">
           {STATUS_OPTS.map((o) => (
             <Chip key={o.key} active={status === o.key} onClick={() => setStatus(o.key)}>
@@ -144,17 +154,15 @@ export default function Directory({
           ))}
         </FilterGroup>
 
-        <Separator />
-
-        <FilterGroup label="Сфера">
-          {spheres.map((s) => (
-            <Chip key={s} active={sphere === s} onClick={() => setSphere(s)}>
-              {s === 'all' ? 'Все' : s}
-            </Chip>
-          ))}
-        </FilterGroup>
-
-        <Separator />
+        {spheres.length > 1 && (
+          <FilterGroup label="Сфера">
+            {spheres.map((s) => (
+              <Chip key={s} active={sphere === s} onClick={() => setSphere(s)}>
+                {s === 'all' ? 'Все' : s}
+              </Chip>
+            ))}
+          </FilterGroup>
+        )}
 
         <FilterGroup label="Регион">
           {REGION_OPTS.map((r) => (
@@ -175,7 +183,7 @@ export default function Directory({
         <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {filtered.map((s, idx) => (
             <li key={s.id}>
-              <Card item={s} index={idx} onOpen={() => setOpenId(s.id)} />
+              <Card item={s} index={idx} isMe={!!myId && s.id === myId} onOpen={() => setOpenId(s.id)} />
             </li>
           ))}
         </ul>
@@ -233,17 +241,13 @@ function StatBadge({ color, label }: { color: string; label: string }) {
 
 function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-[11px] text-text3 uppercase tracking-[.5px] font-medium mr-0.5">
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-[11px] text-text3 uppercase tracking-[.5px] font-medium mr-0.5 shrink-0">
         {label}:
       </span>
       {children}
     </div>
   );
-}
-
-function Separator() {
-  return <span className="w-px h-5 bg-line mx-1" />;
 }
 
 function Chip({
@@ -286,18 +290,27 @@ function SearchIcon() {
   );
 }
 
-function Card({ item, index, onOpen }: { item: DirItem; index: number; onOpen: () => void }) {
+function Card({ item, index, isMe, onOpen }: { item: DirItem; index: number; isMe: boolean; onOpen: () => void }) {
   const color = statusColor(item.status);
   return (
     <button
       onClick={onOpen}
-      className="w3n-card-anim text-left w-full bg-surface border border-line rounded p-[18px] hover:shadow-md hover:-translate-y-0.5 transition-all"
+      className={`w3n-card-anim text-left w-full bg-surface border rounded p-[18px] hover:shadow-md hover:-translate-y-0.5 transition-all ${
+        isMe ? 'border-accent' : 'border-line'
+      }`}
       style={{ animationDelay: `${index * 0.03}s` }}
     >
       <div className="flex gap-3 mb-2.5">
         <Avatar item={item} size={40} radius={10} />
         <div className="min-w-0 flex-1">
-          <div className="font-semibold text-[14px] truncate">{item.name}</div>
+          <div className="font-semibold text-[14px] truncate flex items-center gap-1.5">
+            {item.name}
+            {isMe && (
+              <span className="shrink-0 text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-accent text-white">
+                это вы
+              </span>
+            )}
+          </div>
           <div className="text-[11px] text-text3 flex items-center gap-1 truncate">
             <PinIcon />
             <span className="truncate">
