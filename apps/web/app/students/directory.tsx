@@ -241,11 +241,11 @@ function StatBadge({ color, label }: { color: string; label: string }) {
 
 function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-[11px] text-text3 uppercase tracking-[.5px] font-medium mr-0.5 shrink-0">
+    <div className="flex items-start gap-1.5">
+      <span className="text-[11px] text-text3 uppercase tracking-[.5px] font-medium mr-0.5 shrink-0 pt-1.5">
         {label}:
       </span>
-      <div className="flex items-center gap-1.5 overflow-x-auto -mr-6 pr-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:mr-0 sm:pr-0">
+      <div className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0">
         {children}
       </div>
     </div>
