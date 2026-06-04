@@ -142,8 +142,9 @@ bot.start(async (ctx) => {
       .maybeSingle();
     if (upd.data) {
       await ctx.reply(
-        `Готово, ${student.display_name}. Вернись на сайт — ты уже залогинен.\n\n` +
-          `Управление профилем здесь, в боте: /profile /edit /work_add /help`,
+        `Готово, ${student.display_name}. Ты уже залогинен на сайте — открывай и пользуйся.\n\n` +
+          `Дополнить о себе можно в любой момент: здесь в боте (/edit, /work_add) или прямо на сайте.`,
+        Markup.inlineKeyboard([[Markup.button.url('Открыть витрину студентов', SITE_URL)]]),
       );
       return;
     }
@@ -179,7 +180,11 @@ bot.command('agree', async (ctx) => {
   await setPublished(db, student.id, true);
   await clearSession(db, ctx.from.id);
   await ctx.reply(
-    `Готово. Твой профиль опубликован: ${profileUrl(student)}\n\nКоманды: /profile /edit /work_add /works /hide /forget /help`,
+    `Готово. Твой профиль опубликован.\n\nДополнить о себе можно в любой момент: /edit /work_add — или прямо на сайте. Команды: /profile /works /hide /forget /help`,
+    Markup.inlineKeyboard([
+      [Markup.button.url('Мой профиль', profileUrl(student))],
+      [Markup.button.url('Все участники курса', SITE_URL)],
+    ]),
   );
 });
 
