@@ -1,10 +1,13 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { destroySession } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: NextRequest) {
+export async function POST() {
   await destroySession();
-  return NextResponse.redirect(new URL('/students', req.url), { status: 303 });
+  // Относительный Location: браузер резолвит его от публичного домена,
+  // с которого пришёл POST. Не используем req.url — за прокси Railway он
+  // содержит внутренний хост 0.0.0.0 и ломает редирект.
+  return new NextResponse(null, { status: 303, headers: { Location: '/students' } });
 }
