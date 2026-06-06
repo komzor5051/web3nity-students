@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { REGION_OPTS } from '@/lib/region';
 
 export type DirItem = {
   id: string;
@@ -28,8 +29,6 @@ const STATUS_OPTS: { key: StatusKey; label: string }[] = [
   { key: 'cofounder', label: 'Ищу партнёров' },
   { key: 'client', label: 'Ищу клиентов' },
 ];
-
-const REGION_OPTS = ['Все', 'СНГ', 'Европа', 'Ближний Восток', 'Азия', 'Америка'];
 
 function statusKey(s: DirItem['status']): Exclude<StatusKey, 'all'> | null {
   if (s === 'just_learning') return 'learning';

@@ -1,5 +1,6 @@
 import { supabase, studentSlug, tbl, type StudentRow } from '@/lib/db';
 import { getCurrentStudent, serviceClient } from '@/lib/auth';
+import { resolveRegion } from '@/lib/region';
 import Directory, { type DirItem } from './directory';
 
 export const dynamic = 'force-dynamic';
@@ -35,7 +36,7 @@ export default async function StudentsPage() {
     name: s.display_name,
     city: s.city,
     country: s.country,
-    region: regionOf(s.country),
+    region: resolveRegion(s.city, s.country),
     niche: s.niche,
     sphere: s.sphere,
     bio: s.bio,
@@ -47,44 +48,6 @@ export default async function StudentsPage() {
   }));
 
   return <Directory items={items} myId={myId} recCount={recCount} />;
-}
-
-const REGION_MAP: Record<string, string> = {
-  'Россия': 'СНГ',
-  'Беларусь': 'СНГ',
-  'Украина': 'СНГ',
-  'Казахстан': 'СНГ',
-  'Узбекистан': 'СНГ',
-  'Армения': 'СНГ',
-  'Грузия': 'СНГ',
-  'Молдавия': 'СНГ',
-  'Молдова': 'СНГ',
-  'Киргизия': 'СНГ',
-  'Германия': 'Европа',
-  'Испания': 'Европа',
-  'Франция': 'Европа',
-  'Италия': 'Европа',
-  'Польша': 'Европа',
-  'Чехия': 'Европа',
-  'Нидерланды': 'Европа',
-  'Португалия': 'Европа',
-  'ОАЭ': 'Ближний Восток',
-  'Израиль': 'Ближний Восток',
-  'Турция': 'Ближний Восток',
-  'Китай': 'Азия',
-  'Тайланд': 'Азия',
-  'Вьетнам': 'Азия',
-  'Индонезия': 'Азия',
-  'США': 'Америка',
-  'Канада': 'Америка',
-  'Мексика': 'Америка',
-  'Бразилия': 'Америка',
-  'Аргентина': 'Америка',
-};
-
-function regionOf(country: string | null): string | null {
-  if (!country) return null;
-  return REGION_MAP[country] ?? null;
 }
 
 const AVATAR_PALETTE = ['#E85A2A', '#2A6BE8', '#2D8F5E', '#7C3AED', '#CA8A04'];
