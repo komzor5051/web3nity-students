@@ -21,15 +21,6 @@ export default async function StudentsPage() {
   const me = await getCurrentStudent().catch(() => null);
   const myId = me?.id ?? null;
 
-  let recCount = 0;
-  if (myId) {
-    const { count } = await serviceClient()
-      .from(tbl('recommendations'))
-      .select('recommended_id', { count: 'exact', head: true })
-      .eq('student_id', myId);
-    recCount = count ?? 0;
-  }
-
   const items: DirItem[] = list.map((s) => ({
     id: s.id,
     slug: studentSlug(s),
@@ -47,7 +38,24 @@ export default async function StudentsPage() {
     avatarUrl: s.avatar_url,
   }));
 
-  return <Directory items={items} myId={myId} recCount={recCount} />;
+  let recommendations: { item: DirItem; reason: string | null }[] = [];
+  if (myId) {
+    const { data: recsData } = await serviceClient()
+      .from(tbl('recommendations'))
+      .select('recommended_id, reason, rank')
+      .eq('student_id', myId)
+      .order('rank', { ascending: true });
+    const recs = (recsData ?? []) as { recommended_id: string; reason: string | null; rank: number }[];
+    const byId = new Map(items.map((i) => [i.id, i]));
+    recommendations = recs
+      .map((r) => {
+        const item = byId.get(r.recommended_id);
+        return item ? { item, reason: r.reason } : null;
+      })
+      .filter((x): x is { item: DirItem; reason: string | null } => x !== null);
+  }
+
+  return <Directory items={items} myId={myId} recommendations={recommendations} />;
 }
 
 const AVATAR_PALETTE = ['#E85A2A', '#2A6BE8', '#2D8F5E', '#7C3AED', '#CA8A04'];

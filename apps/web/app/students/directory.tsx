@@ -21,16 +21,17 @@ export type DirItem = {
   avatarUrl: string | null;
 };
 
-type StatusKey = 'all' | 'learning' | 'cofounder' | 'client';
+type StatusKey = 'all' | 'learning' | 'cofounder' | 'client' | 'none';
 
 const STATUS_OPTS: { key: StatusKey; label: string }[] = [
   { key: 'all', label: 'Все' },
   { key: 'learning', label: 'Учусь' },
   { key: 'cofounder', label: 'Ищу партнёров' },
   { key: 'client', label: 'Ищу клиентов' },
+  { key: 'none', label: 'Без статуса' },
 ];
 
-function statusKey(s: DirItem['status']): Exclude<StatusKey, 'all'> | null {
+function statusKey(s: DirItem['status']): 'learning' | 'cofounder' | 'client' | null {
   if (s === 'just_learning') return 'learning';
   if (s === 'looking_for_partners') return 'cofounder';
   if (s === 'looking_for_clients') return 'client';
@@ -55,17 +56,18 @@ function statusColor(s: DirItem['status']): { dot: string; text: string } {
 export default function Directory({
   items,
   myId,
-  recCount = 0,
+  recommendations,
 }: {
   items: DirItem[];
   myId: string | null;
-  recCount?: number;
+  recommendations: { item: DirItem; reason: string | null }[];
 }) {
   const [status, setStatus] = useState<StatusKey>('all');
   const [sphere, setSphere] = useState<string>('all');
   const [region, setRegion] = useState<string>('Все');
   const [q, setQ] = useState<string>('');
   const [openId, setOpenId] = useState<string | null>(null);
+  const [recsOpen, setRecsOpen] = useState(false);
 
   const spheres = useMemo(() => {
     // Только короткие и реально общие категории — длинные описательные «сферы»
@@ -90,25 +92,65 @@ export default function Directory({
     return { total: items.length, countries: countries.size, spheres: set.size };
   }, [items]);
 
-  const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    return items.filter((i) => {
-      if (status !== 'all') {
-        const k = statusKey(i.status);
-        if (k !== status) return false;
-      }
-      if (sphere !== 'all' && i.sphere !== sphere) return false;
-      if (region !== 'Все' && i.region !== region) return false;
-      if (term) {
-        const hay = [i.name, i.niche, i.sphere, i.city, i.country, i.bio]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase();
-        if (!hay.includes(term)) return false;
-      }
-      return true;
-    });
-  }, [items, status, sphere, region, q, myId]);
+  const term = q.trim().toLowerCase();
+
+  const okStatus = (i: DirItem) => {
+    if (status === 'all') return true;
+    const k = statusKey(i.status);
+    return status === 'none' ? k === null : k === status;
+  };
+  const okSphere = (i: DirItem) => sphere === 'all' || i.sphere === sphere;
+  const okRegion = (i: DirItem) => region === 'Все' || i.region === region;
+  const okSearch = (i: DirItem) => {
+    if (!term) return true;
+    const hay = [i.name, i.niche, i.sphere, i.city, i.country, i.bio]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return hay.includes(term);
+  };
+
+  // Фасетные счётчики: для каждого фильтра учитываем все ОСТАЛЬНЫЕ активные
+  // фильтры, но не сам фильтр (иначе у активного чипа всегда стоял бы его же
+  // размер). Так цифры всегда отражают, сколько найдётся при таком выборе.
+  const statusCounts = useMemo(() => {
+    const c: Record<StatusKey, number> = { all: 0, learning: 0, cofounder: 0, client: 0, none: 0 };
+    for (const i of items) {
+      if (!okSphere(i) || !okRegion(i) || !okSearch(i)) continue;
+      c.all++;
+      c[statusKey(i.status) ?? 'none']++;
+    }
+    return c;
+  }, [items, sphere, region, term]);
+
+  const sphereCounts = useMemo(() => {
+    const c = new Map<string, number>();
+    let all = 0;
+    for (const i of items) {
+      if (!okStatus(i) || !okRegion(i) || !okSearch(i)) continue;
+      all++;
+      if (i.sphere) c.set(i.sphere, (c.get(i.sphere) ?? 0) + 1);
+    }
+    c.set('all', all);
+    return c;
+  }, [items, status, region, term]);
+
+  const regionCounts = useMemo(() => {
+    const c = new Map<string, number>();
+    let all = 0;
+    for (const i of items) {
+      if (!okStatus(i) || !okSphere(i) || !okSearch(i)) continue;
+      all++;
+      if (i.region) c.set(i.region, (c.get(i.region) ?? 0) + 1);
+    }
+    c.set('Все', all);
+    return c;
+  }, [items, status, sphere, term]);
+
+  const filtered = useMemo(
+    () => items.filter((i) => okStatus(i) && okSphere(i) && okRegion(i) && okSearch(i)),
+    [items, status, sphere, region, term],
+  );
 
   const opened = openId ? items.find((i) => i.id === openId) ?? null : null;
 
@@ -127,7 +169,16 @@ export default function Directory({
         </div>
       </section>
 
-      {recCount > 0 && <RecBanner count={recCount} />}
+      {recommendations.length > 0 && (
+        <div className="mb-6">
+          <button
+            onClick={() => setRecsOpen(true)}
+            className="px-4 py-2.5 rounded-sm bg-accent text-white text-[13px] font-semibold hover:bg-accent-dark transition-colors"
+          >
+            Ваши рекомендации · {recommendations.length}
+          </button>
+        </div>
+      )}
 
       <div className="flex items-center justify-between mb-3.5">
         <h2 className="font-display text-[20px]">Все участники</h2>
@@ -146,9 +197,13 @@ export default function Directory({
 
       <div className="flex flex-col gap-3 mb-5">
         <FilterGroup label="Статус">
-          {STATUS_OPTS.map((o) => (
+          {STATUS_OPTS.filter(
+            // «Без статуса» прячем, когда таких нет — чтобы не мозолил пустым нулём
+            (o) => o.key !== 'none' || statusCounts.none > 0,
+          ).map((o) => (
             <Chip key={o.key} active={status === o.key} onClick={() => setStatus(o.key)}>
               {o.label}
+              <span className="ml-1 opacity-50">{statusCounts[o.key]}</span>
             </Chip>
           ))}
         </FilterGroup>
@@ -158,6 +213,7 @@ export default function Directory({
             {spheres.map((s) => (
               <Chip key={s} active={sphere === s} onClick={() => setSphere(s)}>
                 {s === 'all' ? 'Все' : s}
+                <span className="ml-1 opacity-50">{sphereCounts.get(s) ?? 0}</span>
               </Chip>
             ))}
           </FilterGroup>
@@ -167,6 +223,7 @@ export default function Directory({
           {REGION_OPTS.map((r) => (
             <Chip key={r} active={region === r} onClick={() => setRegion(r)}>
               {r}
+              <span className="ml-1 opacity-50">{regionCounts.get(r) ?? 0}</span>
             </Chip>
           ))}
         </FilterGroup>
@@ -189,43 +246,81 @@ export default function Directory({
       )}
 
       {opened && <Modal item={opened} onClose={() => setOpenId(null)} />}
+      {recsOpen && (
+        <RecsModal recommendations={recommendations} onClose={() => setRecsOpen(false)} />
+      )}
     </div>
   );
 }
 
-function recPlural(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 14) return 'рекомендаций';
-  if (mod10 === 1) return 'рекомендация';
-  if (mod10 >= 2 && mod10 <= 4) return 'рекомендации';
-  return 'рекомендаций';
-}
-
-function RecBanner({ count }: { count: number }) {
+function RecsModal({
+  recommendations,
+  onClose,
+}: {
+  recommendations: { item: DirItem; reason: string | null }[];
+  onClose: () => void;
+}) {
   return (
-    <Link
-      href="/recommendations"
-      className="group flex items-center gap-4 mb-6 p-4 rounded-lg border border-accent-light bg-accent-light/60 hover:bg-accent-light transition-colors"
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 bg-black/35 backdrop-blur-[4px] z-40 flex items-center justify-center p-4"
     >
-      <span className="shrink-0 w-12 h-12 rounded-[12px] bg-accent flex items-center justify-center text-white">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M12 2.5l1.9 4.8 4.8 1.9-4.8 1.9L12 16l-1.9-4.9-4.8-1.9 4.8-1.9z" />
-          <path d="M18.5 14l.9 2.3 2.3.9-2.3.9-.9 2.3-.9-2.3-2.3-.9 2.3-.9z" />
-        </svg>
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="font-semibold text-[15px] text-ink">
-          {count} {recPlural(count)} для вас
+      <div className="bg-surface rounded-lg w-[560px] max-w-full max-h-[85vh] overflow-y-auto shadow-lg relative">
+        <button
+          onClick={onClose}
+          className="absolute top-3.5 right-3.5 bg-surface-hover w-7 h-7 rounded-full text-text2 text-[13px] flex items-center justify-center hover:bg-line"
+        >
+          ✕
+        </button>
+        <div className="px-6 pt-6 pb-2">
+          <h2 className="font-display text-[20px] mb-0.5">Ваши рекомендации</h2>
+          <p className="text-[13px] text-text2">
+            Участники курса, с которыми вам стоит познакомиться.
+          </p>
         </div>
-        <div className="text-[13px] text-text2">
-          Мы подобрали людей, с которыми вам стоит познакомиться
-        </div>
+        <ul className="px-6 py-4 space-y-3">
+          {recommendations.map(({ item, reason }) => (
+            <li key={item.id} className="bg-surface border border-line rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <Avatar item={item} size={48} radius={12} />
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold text-[14px] truncate">{item.name}</div>
+                  <div className="text-[12px] text-text3 truncate">
+                    {[item.niche, item.city || item.country].filter(Boolean).join(' · ') || '—'}
+                  </div>
+                  {reason && (
+                    <div className="mt-2.5 flex gap-2 rounded bg-accent-light px-3 py-2">
+                      <span className="text-accent shrink-0 mt-px">›</span>
+                      <p className="text-[13px] text-tag-text leading-snug">{reason}</p>
+                    </div>
+                  )}
+                  <div className="mt-3 flex gap-2 flex-wrap">
+                    {item.telegram && (
+                      <a
+                        href={`https://t.me/${item.telegram}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[12px] px-3 py-1.5 rounded-full bg-accent text-white hover:bg-accent-dark"
+                      >
+                        Написать
+                      </a>
+                    )}
+                    <Link
+                      href={`/students/${item.slug}`}
+                      className="text-[12px] px-3 py-1.5 rounded-full border border-line text-text2 hover:border-accent hover:text-accent"
+                    >
+                      Открыть профиль
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
       </div>
-      <span className="shrink-0 text-accent text-xl group-hover:translate-x-0.5 transition-transform">
-        →
-      </span>
-    </Link>
+    </div>
   );
 }
 

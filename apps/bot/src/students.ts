@@ -23,9 +23,12 @@ function displayName(user: TgUser): string {
 /**
  * Найти / создать запись студента под пользователя бота.
  * 1. По telegram_user_id — основной путь.
- * 2. Иначе — по (cohort, import_key) — матчим импортированный профиль и
+ * 2. Иначе — по telegram_username (cohort, непривязанные) — матчим
+ *    импортированный профиль по @username без учёта регистра, только при
+ *    единственном совпадении.
+ * 3. Иначе — по (cohort, import_key) — матчим импортированный профиль и
  *    проставляем telegram_user_id + telegram_username.
- * 3. Иначе — создаём нового, is_published=false до получения /agree.
+ * 4. Иначе — создаём нового, is_published=false до получения /agree.
  */
 export async function getOrAttachStudent(
   db: SupabaseClient,
@@ -37,6 +40,39 @@ export async function getOrAttachStudent(
     .eq('telegram_user_id', user.id)
     .maybeSingle();
   if (byId.data) return byId.data as Student;
+
+  // Матчинг по @username: только среди непривязанных профилей в рамках cohort.
+  // Telegram username регистронезависим → сравниваем lower(); ведущий '@' срезаем.
+  // Привязка только при единственном совпадении (иначе неоднозначно — пропуск,
+  // как в reconcileFromChat).
+  const username = user.username?.replace(/^@/, '').toLowerCase();
+  if (username) {
+    const byUsername = await db
+      .from(tbl('students'))
+      .select('*')
+      .eq('cohort', COHORT)
+      .is('telegram_user_id', null)
+      .ilike('telegram_username', username);
+    // ilike трактует '_' как wildcard, а в Telegram-username подчёркивания
+    // легальны → дофильтровываем точным равенством, чтобы 'foo_bar' не сматчил
+    // 'fooXbar'. Привязываем только при единственном точном совпадении.
+    const exact = (byUsername.data as Student[] | null)?.filter(
+      (s) => (s.telegram_username ?? '').replace(/^@/, '').toLowerCase() === username,
+    );
+    if (!byUsername.error && exact && exact.length === 1) {
+      const match = exact[0]!;
+      const updated = await db
+        .from(tbl('students'))
+        .update({
+          telegram_user_id: user.id,
+          telegram_username: user.username ?? null,
+        })
+        .eq('id', match.id)
+        .select('*')
+        .single();
+      if (updated.data) return updated.data as Student;
+    }
+  }
 
   const importKey = normalizeAuthorKey(displayName(user));
   if (importKey) {
