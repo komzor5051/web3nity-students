@@ -92,16 +92,6 @@ export default function ProfileEditor({ student }: { student: StudentRow }) {
         </div>
       </div>
 
-      <label className="flex items-center gap-2 mt-5 text-sm text-text2 cursor-pointer">
-        <input
-          type="checkbox"
-          name="is_published"
-          defaultChecked={student.is_published}
-          className="w-4 h-4 accent-accent"
-        />
-        Показывать профиль на витрине
-      </label>
-
       <div className="mt-5 flex items-center gap-3">
         <SaveButton />
         {state?.ok === true && <span className="text-green text-sm">Сохранено</span>}

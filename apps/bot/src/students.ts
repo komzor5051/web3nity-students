@@ -103,7 +103,7 @@ export async function getOrAttachStudent(
       display_name: displayName(user) || `User ${user.id}`,
       import_key: importKey || null,
       cohort: COHORT,
-      is_published: false, // публикация — на сайте
+      is_published: true, // профиль виден всем по умолчанию, скрыть нельзя
     })
     .select('*')
     .single();

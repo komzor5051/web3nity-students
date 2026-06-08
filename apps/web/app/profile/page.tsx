@@ -40,7 +40,7 @@ export default async function ProfilePage() {
               </Link>
             ) : (
               <span className="text-xs text-text3">
-                Профиль скрыт — включите публикацию ниже, чтобы открылась публичная страница.
+                Сохраните профиль ниже — и откроется публичная страница.
               </span>
             )}
           </div>

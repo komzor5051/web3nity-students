@@ -210,7 +210,7 @@ describe('getOrAttachStudent', () => {
     expect(insertSpy).toHaveBeenCalledOnce();
     expect(insertSpy.mock.calls[0]![0]).toMatchObject({
       telegram_user_id: 42,
-      is_published: false,
+      is_published: true, // профиль виден по умолчанию
     });
   });
 });

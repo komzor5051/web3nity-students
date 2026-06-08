@@ -37,7 +37,8 @@ export async function updateProfile(_prev: ActionResult | null, form: FormData):
     hobbies: text(form, 'hobbies'),
     age: age && age > 10 && age < 100 ? age : null,
     status,
-    is_published: form.get('is_published') === 'on',
+    // Профиль виден всем по умолчанию и скрыть его нельзя (политика витрины).
+    is_published: true,
   };
 
   const { error } = await serviceClient().from(tbl('students')).update(patch).eq('id', me.id);
