@@ -30,7 +30,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <Link
             href="/students"
             aria-label="На главную — участники курса"
-            className="flex items-center gap-2 font-bold text-[13px] tracking-[.5px] -my-2 py-2 pr-2 select-none"
+            className="flex items-center gap-2 font-bold text-[13px] tracking-[.5px] -my-2 py-2 pr-2 select-none touch-manipulation"
           >
             <span className="w-7 h-7 bg-accent rounded-[7px] flex items-center justify-center text-white text-[12px] shrink-0">W</span>
             <span className="whitespace-nowrap">AI-АССИСТЕНТЫ 3.0</span>

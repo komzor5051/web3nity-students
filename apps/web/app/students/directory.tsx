@@ -188,8 +188,9 @@ export default function Directory({
       {recommendations.length > 0 && (
         <div className="mb-6">
           <button
+            type="button"
             onClick={() => setRecsOpen(true)}
-            className="px-4 py-2.5 rounded-sm bg-accent text-white text-[13px] font-semibold hover:bg-accent-dark transition-colors"
+            className="px-4 py-2.5 rounded-sm bg-accent text-white text-[13px] font-semibold hover:bg-accent-dark active:bg-accent-dark transition-colors touch-manipulation"
           >
             Ваши рекомендации · {recommendations.length}
           </button>
@@ -373,8 +374,9 @@ function Chip({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className={`px-3 py-1.5 rounded-full text-[12px] border transition-colors whitespace-nowrap ${
+      className={`px-3 py-1.5 rounded-full text-[12px] border transition-colors whitespace-nowrap touch-manipulation ${
         active
           ? 'bg-ink text-white border-ink'
           : 'bg-surface text-text2 border-line hover:border-text3'
