@@ -18,7 +18,7 @@ export default async function LoginPage() {
         </div>
         <h1 className="font-display text-2xl mb-2">Вход через Telegram</h1>
         <p className="text-text2 text-sm mb-6">
-          Откройте бот курса — он подтвердит вашу личность и подтянет профиль.
+          Откройте бот Web3nity School — он подтвердит вашу личность и подтянет профиль.
         </p>
         {!bot ? (
           <p className="text-red-600 text-sm">

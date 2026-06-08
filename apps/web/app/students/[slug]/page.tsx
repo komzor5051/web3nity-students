@@ -29,7 +29,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   if (!s) return {};
   return {
     title: `${s.display_name}${s.niche ? ' — ' + s.niche : ''}`,
-    description: s.bio ?? `Профиль ${s.display_name} в витрине курса AI-Ассистенты 3.0.`,
+    description: s.bio ?? `Профиль ${s.display_name} — ученик Web3nity School.`,
     openGraph: { title: s.display_name, description: s.bio ?? undefined },
   };
 }
@@ -99,7 +99,7 @@ export default async function StudentPage({ params }: { params: Promise<{ slug: 
 
       <Section title="Работы">
         {list.length === 0 ? (
-          <p className="text-muted">Скоро тут появятся кейсы. Студент только начал курс.</p>
+          <p className="text-muted">Скоро тут появятся кейсы. Ученик только начал обучение.</p>
         ) : (
           <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {list.map((w) => (

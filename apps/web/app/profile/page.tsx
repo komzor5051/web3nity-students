@@ -28,7 +28,7 @@ export default async function ProfilePage() {
         <div className="min-w-0 flex-1">
           <h1 className="font-display text-2xl">{me.display_name}</h1>
           <div className="text-text2 text-sm">
-            {[me.niche, me.city || me.country].filter(Boolean).join(' · ') || 'Профиль курса AI-Ассистенты 3.0'}
+            {[me.niche, me.city || me.country].filter(Boolean).join(' · ') || 'Профиль ученика Web3nity School'}
           </div>
           <div className="mt-3 flex gap-2 flex-wrap items-center">
             {me.is_published ? (

@@ -29,11 +29,11 @@ export default async function OG({ params }: { params: { slug: string } }) {
         }}
       >
         <div style={{ fontSize: 28, letterSpacing: 4, textTransform: 'uppercase', color: '#8A8378' }}>
-          AI-Ассистенты 3.0 — Web3nity
+          Web3nity School
         </div>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ fontSize: 96, fontWeight: 800, lineHeight: 1.05, letterSpacing: -2 }}>
-            {s?.display_name ?? 'Студент'}
+            {s?.display_name ?? 'Ученик'}
           </div>
           <div style={{ fontSize: 36, marginTop: 16, color: '#E94E1B' }}>
             {[s?.niche, s?.city || s?.country].filter(Boolean).join(' · ') || ' '}

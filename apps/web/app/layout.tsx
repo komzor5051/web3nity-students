@@ -4,11 +4,11 @@ import Link from 'next/link';
 import { getCurrentStudent } from '@/lib/auth';
 
 export const metadata: Metadata = {
-  title: 'Студенты — AI-Ассистенты 3.0',
-  description: 'Витрина студентов курса AI-Ассистенты 3.0 от Web3nity. Профили, ниши, кейсы.',
+  title: 'Ученики — Web3nity School',
+  description: 'Витрина учеников Web3nity School. Профили, ниши, кейсы.',
   openGraph: {
-    title: 'Студенты — AI-Ассистенты 3.0',
-    description: 'Витрина студентов курса AI-Ассистенты 3.0 от Web3nity.',
+    title: 'Ученики — Web3nity School',
+    description: 'Витрина учеников Web3nity School.',
     type: 'website',
   },
 };
@@ -29,11 +29,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <header className="bg-surface border-b border-line h-[58px] px-6 sm:px-10 flex items-center justify-between sticky top-0 z-30">
           <Link
             href="/students"
-            aria-label="На главную — участники курса"
+            aria-label="На главную — ученики Web3nity School"
             className="flex items-center gap-2 font-bold text-[13px] tracking-[.5px] -my-2 py-2 pr-2 select-none touch-manipulation"
           >
             <span className="w-7 h-7 bg-accent rounded-[7px] flex items-center justify-center text-white text-[12px] shrink-0">W</span>
-            <span className="whitespace-nowrap">AI-АССИСТЕНТЫ 3.0</span>
+            <span className="whitespace-nowrap">WEB3NITY SCHOOL</span>
           </Link>
           <div className="flex items-center gap-3 text-[13px] text-text2">
             {me ? (

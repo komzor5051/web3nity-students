@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useRef } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import type { WorkRow } from '@/lib/db';
 import { createWork, deleteWork, toggleWork, type ActionResult } from './actions';
@@ -8,6 +8,12 @@ import { createWork, deleteWork, toggleWork, type ActionResult } from './actions
 const FIELD =
   'w-full bg-bg border border-line rounded px-3 py-2 text-sm text-ink focus:outline-none focus:border-accent';
 const LABEL = 'text-text3 uppercase tracking-wider text-[11px] mb-1 block';
+
+// Популярные теги для подсказок — клик добавляет в поле. Свободный ввод тоже работает.
+const SUGGESTED_TAGS = [
+  'n8n', 'Make', 'телеграм-бот', 'чат-бот', 'ИИ-агент', 'GPT',
+  'автоматизация', 'CRM', 'парсинг', 'интеграции', 'автоворонка', 'Google Sheets',
+];
 
 function AddButton() {
   const { pending } = useFormStatus();
@@ -95,16 +101,26 @@ function WorkRowItem({ work }: { work: WorkRow }) {
 export default function WorksSection({ works }: { works: WorkRow[] }) {
   const [state, formAction] = useActionState<ActionResult | null, FormData>(createWork, null);
   const formRef = useRef<HTMLFormElement>(null);
+  const [tags, setTags] = useState('');
 
   useEffect(() => {
-    if (state?.ok) formRef.current?.reset();
+    if (state?.ok) {
+      formRef.current?.reset();
+      setTags('');
+    }
   }, [state]);
+
+  const tagList = tags.split(',').map((t) => t.trim()).filter(Boolean);
+  const addTag = (t: string) => {
+    if (tagList.some((x) => x.toLowerCase() === t.toLowerCase())) return;
+    setTags([...tagList, t].join(', '));
+  };
 
   return (
     <div className="bg-surface border border-line rounded-lg p-6">
       <h2 className="font-display text-xl mb-1">Мои проекты</h2>
       <p className="text-text3 text-sm mb-5">
-        Добавляйте кейсы и работы, сделанные после прохождения курсов Web3nity. Они появятся на вашей публичной странице.
+        Добавляйте кейсы и работы, сделанные на обучении в Web3nity School. Они появятся на вашей публичной странице.
       </p>
 
       {works.length > 0 ? (
@@ -137,8 +153,37 @@ export default function WorksSection({ works }: { works: WorkRow[] }) {
           />
         </div>
         <div>
-          <label className={LABEL}>Теги через запятую</label>
-          <input name="tags" className={FIELD} placeholder="n8n, телеграм-бот, crm" />
+          <label className={LABEL}>Теги</label>
+          <p className="text-text3 text-xs mb-2">
+            Технологии и темы проекта — по ним вас находят в поиске и фильтрах. Нажмите готовые или впишите свои через запятую.
+          </p>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {SUGGESTED_TAGS.map((t) => {
+              const active = tagList.some((x) => x.toLowerCase() === t.toLowerCase());
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => addTag(t)}
+                  disabled={active}
+                  className={`text-[12px] px-2.5 py-1 rounded-full border touch-manipulation transition-colors ${
+                    active
+                      ? 'bg-accent-light border-accent-light text-accent cursor-default'
+                      : 'bg-surface border-line text-text2 hover:border-accent hover:text-accent'
+                  }`}
+                >
+                  {active ? t : `+ ${t}`}
+                </button>
+              );
+            })}
+          </div>
+          <input
+            name="tags"
+            value={tags}
+            onChange={(e) => setTags(e.target.value)}
+            className={FIELD}
+            placeholder="например: n8n, телеграм-бот, CRM"
+          />
         </div>
         <div>
           <label className={LABEL}>Файлы — скриншоты, фото (до 15 МБ каждый)</label>

@@ -173,13 +173,13 @@ export default function Directory({
   return (
     <div className="max-w-[1260px] mx-auto px-6 sm:px-10 py-7 overflow-x-clip">
       <section className="mb-6">
-        <h1 className="font-display text-[28px] mb-1.5">Участники курса Web3nity</h1>
+        <h1 className="font-display text-[28px] mb-1.5">Ученики Web3nity School</h1>
         <p className="text-text2 text-sm">
-          Познакомьтесь с другими студентами, найдите партнёров, клиентов или единомышленников.
+          Познакомьтесь с другими учениками, найдите партнёров, клиентов или единомышленников.
           Напишите любому напрямую в Telegram.
         </p>
         <div className="flex flex-wrap gap-4 mt-2.5 text-[13px] text-text3">
-          <StatBadge color="bg-accent" label={`${stats.total} участник${plural(stats.total)}`} />
+          <StatBadge color="bg-accent" label={`${stats.total} ученик${plural(stats.total)}`} />
           <StatBadge color="bg-green" label={`${stats.countries} стран`} />
           <StatBadge color="bg-blue" label={`${stats.spheres} сфер`} />
         </div>
@@ -198,7 +198,7 @@ export default function Directory({
       )}
 
       <div className="flex items-center justify-between mb-3.5">
-        <h2 className="font-display text-[20px]">Все участники</h2>
+        <h2 className="font-display text-[20px]">Все ученики</h2>
         <span className="text-[12px] text-text3">{filtered.length} чел.</span>
       </div>
 
@@ -294,7 +294,7 @@ function RecsModal({
         <div className="px-6 pt-6 pb-2">
           <h2 className="font-display text-[20px] mb-0.5">Ваши рекомендации</h2>
           <p className="text-[13px] text-text2">
-            Участники курса, с которыми вам стоит познакомиться.
+            Ученики Web3nity School, с которыми вам стоит познакомиться.
           </p>
         </div>
         <ul className="px-6 py-4 space-y-3">
@@ -540,7 +540,7 @@ function Modal({ item, onClose }: { item: DirItem; onClose: () => void }) {
         </div>
         <div className="px-6 py-5">
           {item.bio && <Section title="О себе">{item.bio}</Section>}
-          {item.goal && <Section title="Цель на курсе">{item.goal}</Section>}
+          {item.goal && <Section title="Цель обучения">{item.goal}</Section>}
           {item.niche && <Section title="Специализация">{item.niche}</Section>}
           {item.sphere && (
             <div className="mb-4">
