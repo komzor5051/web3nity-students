@@ -31,6 +31,23 @@ const STATUS_OPTS: { key: StatusKey; label: string }[] = [
   { key: 'none', label: 'Без статуса' },
 ];
 
+// Транслитерация кириллицы в латиницу для поиска без привязки к языку ввода:
+// «Ханна» и «Hanna» обе нормализуются к «hanna». Латиница остаётся как есть,
+// поэтому совпадение ловится в обе стороны.
+const CYR_LAT: Record<string, string> = {
+  а: 'a', б: 'b', в: 'v', г: 'g', ґ: 'g', д: 'd', е: 'e', ё: 'e', є: 'e',
+  ж: 'zh', з: 'z', и: 'i', і: 'i', ї: 'i', й: 'i', к: 'k', л: 'l', м: 'm',
+  н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ў: 'u', ф: 'f',
+  х: 'h', ц: 'c', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y', ь: '',
+  э: 'e', ю: 'yu', я: 'ya',
+};
+
+function normalizeSearch(s: string): string {
+  let out = '';
+  for (const ch of s.trim().toLowerCase()) out += CYR_LAT[ch] ?? ch;
+  return out;
+}
+
 function statusKey(s: DirItem['status']): 'learning' | 'cofounder' | 'client' | null {
   if (s === 'just_learning') return 'learning';
   if (s === 'looking_for_partners') return 'cofounder';
@@ -92,7 +109,7 @@ export default function Directory({
     return { total: items.length, countries: countries.size, spheres: set.size };
   }, [items]);
 
-  const term = q.trim().toLowerCase();
+  const term = normalizeSearch(q);
 
   const okStatus = (i: DirItem) => {
     if (status === 'all') return true;
@@ -103,10 +120,9 @@ export default function Directory({
   const okRegion = (i: DirItem) => region === 'Все' || i.region === region;
   const okSearch = (i: DirItem) => {
     if (!term) return true;
-    const hay = [i.name, i.niche, i.sphere, i.city, i.country, i.bio]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase();
+    const hay = normalizeSearch(
+      [i.name, i.niche, i.sphere, i.city, i.country, i.bio].filter(Boolean).join(' '),
+    );
     return hay.includes(term);
   };
 
