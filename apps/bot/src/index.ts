@@ -15,9 +15,12 @@ const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 if (!TOKEN) throw new Error('TELEGRAM_BOT_TOKEN is required');
 
 const SITE_URL = process.env.SITE_URL ?? 'https://ai-education.io/students';
-// Страница входа (там кнопка «Войти через Telegram»). Выводим из SITE_URL,
-// который указывает на витрину (.../students) → сосед .../login.
-const LOGIN_URL = process.env.LOGIN_URL ?? SITE_URL.replace(/\/students\/?$/, '') + '/login';
+// Origin сайта (без /students). Из него строим /login и /auth/claim.
+const SITE_ORIGIN = SITE_URL.replace(/\/students\/?$/, '');
+const LOGIN_URL = process.env.LOGIN_URL ?? SITE_ORIGIN + '/login';
+// Magic-link входа: логинит тот браузер, который откроет ссылку.
+const claimUrl = (token: string): string =>
+  `${SITE_ORIGIN}/auth/claim?token=${encodeURIComponent(token)}`;
 
 const bot = new Telegraf(TOKEN);
 const db = getServiceClient();
@@ -61,8 +64,8 @@ bot.start(async (ctx) => {
       .maybeSingle();
     if (upd.data) {
       await ctx.reply(
-        `Готово, ${student.display_name}. Вход подтверждён — возвращайтесь на сайт, вы уже залогинены.`,
-        Markup.inlineKeyboard([[Markup.button.url('Вернуться на сайт', SITE_URL)]]),
+        `Готово, ${student.display_name}. Нажмите кнопку ниже — откроется ваш личный кабинет, вы уже залогинены.`,
+        Markup.inlineKeyboard([[Markup.button.url('Открыть личный кабинет', claimUrl(token))]]),
       );
       return;
     }
