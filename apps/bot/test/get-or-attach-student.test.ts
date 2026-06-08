@@ -208,7 +208,7 @@ describe('getOrAttachStudent', () => {
 
     expect(result.id).toBe('fresh');
     expect(insertSpy).toHaveBeenCalledOnce();
-    expect(insertSpy.mock.calls[0][0]).toMatchObject({
+    expect(insertSpy.mock.calls[0]![0]).toMatchObject({
       telegram_user_id: 42,
       is_published: false,
     });

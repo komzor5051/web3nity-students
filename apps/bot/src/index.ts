@@ -17,6 +17,7 @@ import {
   reconcileFromChat,
 } from './students.js';
 import { reconcileProfiles } from './reconcile-profiles.js';
+import { ensureAvatar } from './avatar.js';
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 if (!TOKEN) throw new Error('TELEGRAM_BOT_TOKEN is required');
@@ -122,6 +123,10 @@ bot.start(async (ctx) => {
     first_name: tgUser.first_name,
     last_name: tgUser.last_name,
   });
+
+  // Подтягиваем фото профиля из Telegram, если аватара ещё нет.
+  // Fire-and-forget: логин блокировать нельзя, осечка не должна ронять /start.
+  void ensureAvatar(ctx, db, student).catch((e) => console.warn('[avatar] ', e));
 
   // Deep-link web-login: /start auth_<token>
   // payload берётся из ctx.startPayload (telegraf раскладывает /start <payload>).
