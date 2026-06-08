@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { getCurrentStudent, serviceClient } from '@/lib/auth';
 import { tbl } from '@/lib/db';
 import { uploadAvatar, uploadWorkMedia, type MediaItem } from '@/lib/storage';
+import { assignSphere } from '@/lib/sphere';
 
 const STATUSES = ['looking_for_clients', 'looking_for_partners', 'just_learning'];
 
@@ -26,7 +27,7 @@ export async function updateProfile(_prev: ActionResult | null, form: FormData):
   const status =
     typeof statusRaw === 'string' && STATUSES.includes(statusRaw) ? statusRaw : null;
 
-  const patch = {
+  const patch: Record<string, unknown> = {
     display_name: text(form, 'display_name') ?? me.display_name,
     niche: text(form, 'niche'),
     city: text(form, 'city'),
@@ -40,6 +41,25 @@ export async function updateProfile(_prev: ActionResult | null, form: FormData):
     // Профиль виден всем по умолчанию и скрыть его нельзя (политика витрины).
     is_published: true,
   };
+
+  // Авто-сфера: определяем из ниши/профиля одну из уже существующих сфер, чтобы
+  // ученик сразу попал под нужный чип «Сфера». Fail-soft — любая осечка не
+  // мешает сохранению (сфера просто остаётся прежней).
+  try {
+    const { data: rows } = await serviceClient()
+      .from(tbl('students'))
+      .select('sphere')
+      .eq('is_published', true)
+      .not('sphere', 'is', null);
+    const spheres = [...new Set((rows ?? []).map((r) => (r as { sphere: string }).sphere).filter(Boolean))];
+    const sphere = await assignSphere(
+      { niche: patch.niche as string | null, bio: patch.bio as string | null, goal: patch.goal as string | null, expertise: patch.expertise as string | null },
+      spheres,
+    );
+    if (sphere) patch.sphere = sphere;
+  } catch {
+    // оставляем сферу как есть
+  }
 
   const { error } = await serviceClient().from(tbl('students')).update(patch).eq('id', me.id);
   if (error) return { ok: false, error: error.message };
