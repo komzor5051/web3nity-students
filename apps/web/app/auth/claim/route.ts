@@ -11,21 +11,28 @@ export const dynamic = 'force-dynamic';
  * браузере, который открыл ссылку — поэтому работает на мобиле, где вкладка
  * /login и реальный браузер не совпадают.
  *
- * Гонка с опросом /login не страшна: pollAuthToken одноразовый — кто первый,
- * тот и создал сессию. Проигравший получит expired → /login → (если уже
- * залогинен) редирект на /profile.
+ * Гонка с опросом /login безвредна: pollAuthToken создаёт независимую сессию,
+ * обе валидны.
  */
+
+/**
+ * Относительный Location: браузер резолвит от публичного домена, с которого
+ * пришёл запрос. Не используем NextResponse.redirect / req.url — за прокси
+ * Railway origin = внутренний 0.0.0.0:8080 и ломает редирект.
+ */
+function redirectTo(path: string): NextResponse {
+  return new NextResponse(null, { status: 303, headers: { Location: path } });
+}
+
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token');
-  const origin = req.nextUrl.origin;
-
   if (token) {
     const result = await pollAuthToken(token);
     if (result.status === 'confirmed') {
       const jar = await cookies();
       setSessionCookie(jar, result.sessionId);
-      return NextResponse.redirect(new URL('/profile', origin));
+      return redirectTo('/profile');
     }
   }
-  return NextResponse.redirect(new URL('/login', origin));
+  return redirectTo('/login');
 }
