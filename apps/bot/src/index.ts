@@ -15,6 +15,9 @@ const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 if (!TOKEN) throw new Error('TELEGRAM_BOT_TOKEN is required');
 
 const SITE_URL = process.env.SITE_URL ?? 'https://ai-education.io/students';
+// Страница входа (там кнопка «Войти через Telegram»). Выводим из SITE_URL,
+// который указывает на витрину (.../students) → сосед .../login.
+const LOGIN_URL = process.env.LOGIN_URL ?? SITE_URL.replace(/\/students\/?$/, '') + '/login';
 
 const bot = new Telegraf(TOKEN);
 const db = getServiceClient();
@@ -58,19 +61,23 @@ bot.start(async (ctx) => {
       .maybeSingle();
     if (upd.data) {
       await ctx.reply(
-        `Готово, ${student.display_name}. Вы вошли на сайте — открывайте и заполняйте профиль.`,
-        Markup.inlineKeyboard([[Markup.button.url('Открыть сайт', SITE_URL)]]),
+        `Готово, ${student.display_name}. Вход подтверждён — возвращайтесь на сайт, вы уже залогинены.`,
+        Markup.inlineKeyboard([[Markup.button.url('Вернуться на сайт', SITE_URL)]]),
       );
       return;
     }
-    await ctx.reply('Ссылка для входа устарела или уже использована. Откройте вход на сайте заново.');
+    await ctx.reply(
+      'Ссылка для входа устарела. Откройте страницу входа и нажмите «Войти через Telegram» заново.',
+      Markup.inlineKeyboard([[Markup.button.url('Страница входа', LOGIN_URL)]]),
+    );
     return;
   }
 
-  // Голый /start без токена — пользователь открыл бота напрямую. Вход начинается с сайта.
+  // Голый /start без токена — пользователь открыл бота напрямую.
+  // Не гоняем «туда-сюда»: коротко объясняем роль бота и даём одну кнопку.
   await ctx.reply(
-    'Это бот витрины студентов курса. Вход и весь профиль — на сайте: нажмите «Войти» там, и вернётесь сюда подтвердить.',
-    Markup.inlineKeyboard([[Markup.button.url('Открыть сайт', SITE_URL)]]),
+    'Личный кабинет, профиль и работы — на сайте. Бот нужен только чтобы подтвердить вход.\n\nОткройте страницу входа и нажмите «Войти через Telegram» — дальше всё само.',
+    Markup.inlineKeyboard([[Markup.button.url('Войти на сайте', LOGIN_URL)]]),
   );
 });
 
