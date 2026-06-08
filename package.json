@@ -13,6 +13,8 @@
     "recommend:dry": "tsx scripts/recommend.ts --dry",
     "spheres": "tsx scripts/spheres.ts",
     "spheres:dry": "tsx scripts/spheres.ts --dry",
+    "enrich:status": "tsx scripts/enrich-status.ts",
+    "enrich:status:dry": "tsx scripts/enrich-status.ts --dry",
     "test": "vitest run",
     "test:parser": "vitest run --dir packages/parser",
     "typecheck": "tsc -b"
