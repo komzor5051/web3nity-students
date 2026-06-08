@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { getCurrentStudent, serviceClient, botUsername } from '@/lib/auth';
+import { getCurrentStudent, serviceClient } from '@/lib/auth';
 import { studentSlug, tbl, type WorkRow } from '@/lib/db';
 import AvatarUploader from './avatar-uploader';
 import ProfileEditor from './profile-editor';
@@ -20,7 +20,6 @@ export default async function ProfilePage() {
   const works = (worksData ?? []) as WorkRow[];
 
   const slug = studentSlug(me);
-  const bot = botUsername();
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-10 space-y-6">
@@ -31,22 +30,18 @@ export default async function ProfilePage() {
           <div className="text-text2 text-sm">
             {[me.niche, me.city || me.country].filter(Boolean).join(' · ') || 'Профиль курса AI-Ассистенты 3.0'}
           </div>
-          <div className="mt-3 flex gap-2 flex-wrap">
-            <Link
-              href={`/students/${slug}`}
-              className="text-xs px-3 py-1 rounded-full border border-line hover:border-accent hover:text-accent"
-            >
-              Открыть публичную страницу
-            </Link>
-            {bot && (
-              <a
-                href={`https://t.me/${bot}`}
-                target="_blank"
-                rel="noopener noreferrer"
+          <div className="mt-3 flex gap-2 flex-wrap items-center">
+            {me.is_published ? (
+              <Link
+                href={`/students/${slug}`}
                 className="text-xs px-3 py-1 rounded-full border border-line hover:border-accent hover:text-accent"
               >
-                Редактировать в боте
-              </a>
+                Открыть публичную страницу
+              </Link>
+            ) : (
+              <span className="text-xs text-text3">
+                Профиль скрыт — включите публикацию ниже, чтобы открылась публичная страница.
+              </span>
             )}
           </div>
         </div>
