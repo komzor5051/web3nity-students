@@ -23,7 +23,7 @@ export default async function ProfilePage() {
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-10 space-y-6">
-      <div className="flex items-start gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start gap-4">
         <AvatarUploader name={me.display_name} url={me.avatar_url} />
         <div className="min-w-0 flex-1">
           <h1 className="font-display text-2xl">{me.display_name}</h1>
