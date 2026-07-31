@@ -9,5 +9,5 @@ export async function POST() {
   // Относительный Location: браузер резолвит его от публичного домена,
   // с которого пришёл POST. Не используем req.url — за прокси Railway он
   // содержит внутренний хост 0.0.0.0 и ломает редирект.
-  return new NextResponse(null, { status: 303, headers: { Location: '/students' } });
+  return new NextResponse(null, { status: 303, headers: { Location: '/' } });
 }

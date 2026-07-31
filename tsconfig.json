@@ -15,8 +15,8 @@
     "lib": ["ES2022"],
     "types": ["node"],
     "paths": {
-      "@web3nity/db": ["./packages/db/src/index.ts"],
-      "@web3nity/parser": ["./packages/parser/src/index.ts"]
+      "@vibe/db": ["./packages/db/src/index.ts"],
+      "@vibe/parser": ["./packages/parser/src/index.ts"]
     }
   },
   "include": ["packages/**/*.ts", "apps/bot/**/*.ts", "scripts/**/*.ts"],

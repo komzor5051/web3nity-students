@@ -54,7 +54,7 @@ export default function LoginClient() {
     };
   }, [data?.token, router]);
 
-  if (error) return <p className="text-red-600 text-sm">{error}</p>;
+  if (error) return <p className="text-ink font-semibold text-sm">{error}</p>;
 
   if (pollingFailed) {
     return (

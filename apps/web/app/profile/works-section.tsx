@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import type { WorkRow } from '@/lib/db';
-import { createWork, deleteWork, toggleWork, type ActionResult } from './actions';
+import { createWork, deleteWork, saveWorkLinks, toggleWork, type ActionResult } from './actions';
 
 const FIELD =
   'w-full bg-bg border border-line rounded px-3 py-2 text-sm text-ink focus:outline-none focus:border-accent';
@@ -28,8 +28,24 @@ function AddButton() {
   );
 }
 
+function SaveLinksButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      disabled={pending}
+      className="text-xs text-text2 underline underline-offset-2 hover:text-accent disabled:opacity-60"
+    >
+      {pending ? 'Сохраняем…' : 'Сохранить ссылки'}
+    </button>
+  );
+}
+
 function WorkRowItem({ work }: { work: WorkRow }) {
   const images = work.media.filter((m) => m.type === 'image');
+  const [linksState, saveLinksAction] = useActionState<ActionResult | null, FormData>(
+    saveWorkLinks,
+    null,
+  );
   return (
     <div className="border border-line rounded-lg p-4">
       <div className="flex items-start justify-between gap-3">
@@ -53,10 +69,10 @@ function WorkRowItem({ work }: { work: WorkRow }) {
         </div>
         <span
           className={`shrink-0 text-[11px] px-2 py-0.5 rounded-full ${
-            work.is_published ? 'bg-green-bg text-green' : 'bg-tag-bg text-text3'
+            work.is_published ? 'bg-accent-light text-accent' : 'bg-tag-bg text-text3'
           }`}
         >
-          {work.is_published ? 'на витрине' : 'скрыт'}
+          {work.is_published ? 'опубликовано' : 'черновик, не виден на витрине'}
         </span>
       </div>
 
@@ -74,12 +90,43 @@ function WorkRowItem({ work }: { work: WorkRow }) {
         </div>
       )}
 
+      <form action={saveLinksAction} className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+        <input type="hidden" name="workId" value={work.id} />
+        <label className="block">
+          <span className={LABEL}>Ссылка на сайт</span>
+          <input
+            name="live_url"
+            type="url"
+            defaultValue={work.live_url ?? ''}
+            placeholder="https://"
+            className={FIELD}
+          />
+        </label>
+        <label className="block">
+          <span className={LABEL}>Репозиторий</span>
+          <input
+            name="repo_url"
+            type="url"
+            defaultValue={work.repo_url ?? ''}
+            placeholder="https://github.com/"
+            className={FIELD}
+          />
+        </label>
+        <div className="sm:col-span-2 flex items-center gap-3">
+          <SaveLinksButton />
+          {linksState?.ok === true && <span className="text-accent text-xs">Сохранено</span>}
+          {linksState?.ok === false && (
+            <span className="text-ink font-semibold text-xs">{linksState.error}</span>
+          )}
+        </div>
+      </form>
+
       <div className="flex gap-3 mt-3">
         <form action={toggleWork}>
           <input type="hidden" name="workId" value={work.id} />
           <input type="hidden" name="next" value={String(!work.is_published)} />
           <button className="text-xs text-text2 underline underline-offset-2 hover:text-accent">
-            {work.is_published ? 'Скрыть с витрины' : 'Показать на витрине'}
+            {work.is_published ? 'снять с витрины' : 'опубликовать'}
           </button>
         </form>
         <form
@@ -89,8 +136,8 @@ function WorkRowItem({ work }: { work: WorkRow }) {
           }}
         >
           <input type="hidden" name="workId" value={work.id} />
-          <button className="text-xs text-text3 underline underline-offset-2 hover:text-red-600">
-            Удалить
+          <button className="text-xs text-text3 underline underline-offset-2 hover:text-ink">
+            Удалить безвозвратно
           </button>
         </form>
       </div>
@@ -118,9 +165,9 @@ export default function WorksSection({ works }: { works: WorkRow[] }) {
 
   return (
     <div className="bg-surface border border-line rounded-lg p-6">
-      <h2 className="font-display text-xl mb-1">Мои проекты</h2>
+      <h2 className="font-mono text-xl mb-1">Мои проекты</h2>
       <p className="text-text3 text-sm mb-5">
-        Добавляйте кейсы и работы, сделанные на обучении в Web3nity School. Они появятся на вашей публичной странице.
+        Добавляйте кейсы и работы, сделанные на обучении на курсе по вайб-кодингу. Они появятся на вашей публичной странице.
       </p>
 
       {works.length > 0 ? (
@@ -138,7 +185,7 @@ export default function WorksSection({ works }: { works: WorkRow[] }) {
         action={formAction}
         className="border-t border-line-light pt-5 space-y-4"
       >
-        <h3 className="font-medium text-ink text-sm">Новый проект</h3>
+        <h3 className="font-mono font-medium text-ink text-sm">Новый проект</h3>
         <div>
           <label className={LABEL}>Название</label>
           <input name="title" required className={FIELD} placeholder="Чат-бот для записи клиентов" />
@@ -186,7 +233,7 @@ export default function WorksSection({ works }: { works: WorkRow[] }) {
           />
         </div>
         <div>
-          <label className={LABEL}>Файлы — скриншоты, фото (до 15 МБ каждый)</label>
+          <label className={LABEL}>Файлы — скриншоты, фото (до 10 файлов, не больше 40 МБ суммарно)</label>
           <input
             name="files"
             type="file"
@@ -197,8 +244,8 @@ export default function WorksSection({ works }: { works: WorkRow[] }) {
         </div>
         <div className="flex items-center gap-3">
           <AddButton />
-          {state?.ok === true && <span className="text-green text-sm">Проект добавлен</span>}
-          {state?.ok === false && <span className="text-red-600 text-sm">{state.error}</span>}
+          {state?.ok === true && <span className="text-accent text-sm">Проект добавлен</span>}
+          {state?.ok === false && <span className="text-ink font-semibold text-sm">{state.error}</span>}
         </div>
       </form>
     </div>

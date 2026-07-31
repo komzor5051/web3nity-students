@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { Telegraf, Markup } from 'telegraf';
-import { getServiceClient, tbl } from '@web3nity/db';
+import { getServiceClient, tbl } from '@vibe/db';
 import { getOrAttachStudent } from './students.js';
 import { ensureAvatar } from './avatar.js';
 

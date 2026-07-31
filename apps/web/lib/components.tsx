@@ -22,7 +22,7 @@ export function Avatar({ name, url, size = 56 }: { name: string; url: string | n
     .join('');
   return (
     <div
-      className="rounded-sm border border-line bg-line/50 flex items-center justify-center font-bold text-cream"
+      className="rounded-sm border border-line bg-line/50 flex items-center justify-center font-bold text-ink"
       style={{ width: size, height: size, fontSize: size * 0.36 }}
     >
       {initials || '?'}

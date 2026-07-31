@@ -5,6 +5,7 @@ import { getCurrentStudent, serviceClient } from '@/lib/auth';
 import { tbl } from '@/lib/db';
 import { uploadAvatar, uploadWorkMedia, type MediaItem } from '@/lib/storage';
 import { assignSphere } from '@/lib/sphere';
+import { validateHttpUrl } from '@/lib/urls';
 
 const STATUSES = ['looking_for_clients', 'looking_for_partners', 'just_learning'];
 
@@ -85,7 +86,7 @@ export async function updateAvatar(_prev: ActionResult | null, form: FormData): 
     .eq('id', me.id);
   if (error) return { ok: false, error: error.message };
   revalidatePath('/profile');
-  revalidatePath('/students');
+  revalidatePath('/');
   return { ok: true };
 }
 
@@ -148,10 +149,43 @@ export async function toggleWork(form: FormData): Promise<void> {
   const workId = form.get('workId');
   const next = form.get('next') === 'true';
   if (typeof workId !== 'string') return;
+  // Ученик может публиковать только свои работы — фильтр по student_id
+  // делает чужой workId no-op вместо изменения чужой записи.
   await serviceClient()
     .from(tbl('works'))
     .update({ is_published: next })
     .eq('id', workId)
     .eq('student_id', me.id);
   revalidatePath('/profile');
+  revalidatePath('/');
+}
+
+/**
+ * Сохранить ссылку на сайт и репозиторий (только своя работа). Пустая
+ * строка -> null. Принимаем только http/https — иначе можно сохранить
+ * javascript: или другую опасную схему, которая потом станет href на
+ * публичной странице работы.
+ */
+export async function saveWorkLinks(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
+  const me = await getCurrentStudent().catch(() => null);
+  if (!me) return { ok: false, error: 'Сессия истекла — войдите заново.' };
+  const workId = form.get('workId');
+  if (typeof workId !== 'string') return { ok: false, error: 'Не удалось определить проект.' };
+
+  const live = validateHttpUrl(text(form, 'live_url'), 'Ссылка на сайт');
+  if (!live.ok) return { ok: false, error: live.error };
+  const repo = validateHttpUrl(text(form, 'repo_url'), 'Репозиторий');
+  if (!repo.ok) return { ok: false, error: repo.error };
+
+  // Ученик может публиковать только свои работы — фильтр по student_id
+  // делает чужой workId no-op вместо изменения чужой записи.
+  const { error } = await serviceClient()
+    .from(tbl('works'))
+    .update({ live_url: live.value, repo_url: repo.value })
+    .eq('id', workId)
+    .eq('student_id', me.id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath('/profile');
+  revalidatePath('/');
+  return { ok: true };
 }

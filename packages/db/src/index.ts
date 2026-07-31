@@ -7,7 +7,7 @@ let _anon: SupabaseClient | null = null;
 
 /**
  * Префикс имён таблиц. Пусто = выделенный проект (каноничная схема из миграции).
- * `web3nity_` = временное размещение в общем проекте lvmn-hub.
+ * `vibe_` = временное размещение в общем проекте lvmn-hub.
  */
 export const TABLE_PREFIX = process.env.SUPABASE_TABLE_PREFIX ?? '';
 /** Префикс имён storage-бакетов (бакеты глобальны на проект). */

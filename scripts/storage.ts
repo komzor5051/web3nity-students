@@ -7,7 +7,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { bucket } from '@web3nity/db';
+import { bucket } from '@vibe/db';
 
 const BUCKET = bucket('works-media');
 

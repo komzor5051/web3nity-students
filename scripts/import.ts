@@ -1,66 +1,63 @@
 #!/usr/bin/env tsx
 /**
- * One-shot import: Telegram HTML export → Supabase.
+ * Импорт: JSON-дамп Telegram → Supabase.
  *
- * Usage:
- *   npm run import:dry -- --export-dir /path/to/ChatExport_2026-05-08
- *   npm run import     -- --export-dir /path/to/ChatExport_2026-05-08
+ *   npm run import:dry        # план без записи
+ *   npm run import            # боевой прогон
  *
- * Idempotent:
- *   - raw_messages keyed by `html:<message_id>` — UPSERT.
- *   - students keyed by (cohort, import_key) — UPSERT, не перетирает поля,
- *     которые студент отредактировал через бот (updated_at > intro.posted_at).
- *   - works keyed by source_message_id — UPSERT, is_published остаётся как был.
+ * Идемпотентность:
+ *   - raw_messages по `tg:<chat_id>:<message_id>` — UPSERT
+ *   - students по (cohort, import_key) — UPSERT, не перетирает то,
+ *     что ученик отредактировал сам (updated_at свежее поста > 60 c)
+ *   - works по source_message_id — UPSERT, is_published не трогается
  */
 
 import 'dotenv/config';
-import { writeFile } from 'node:fs/promises';
-import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import {
-  parseExportDir,
+  readDump,
+  toParsedMessages,
+  topicTitle,
+  usernameByAuthorName,
   groupConsecutive,
   isLongPost,
   normalizeAuthorKey,
-  classifyPosts,
-  type GroupedPost,
-  type ClassifiedPost,
+  classifyByTopic,
+  cohortOf,
+  extractUrls,
+  extractIntros,
+  extractWorks,
+  isMeaningfulIntro,
+  type IntroFields,
+  type WorkFields,
   type ParsedMessage,
-} from '@web3nity/parser';
-import { getServiceClient, tbl, type Student, type MediaItem } from '@web3nity/db';
-import type { SupabaseClient } from '@supabase/supabase-js';
-import { uploadFromExport } from './storage.js';
+  type TopicKind,
+  type FailedBatch,
+} from '@vibe/parser';
+import { getServiceClient, tbl } from '@vibe/db';
 
 interface Args {
-  exportDir: string;
+  dumpFile: string;
   dryRun: boolean;
-  cohort: string;
-  limitPosts?: number;
-  /** Если задан — не пишем в Supabase, а дампим payload-ы students/works в JSON. */
-  outFile?: string;
 }
 
 function parseArgs(argv: string[]): Args {
   const args: Partial<Args> = { dryRun: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--export-dir') args.exportDir = argv[++i];
-    else if (a === '--dry-run') args.dryRun = true;
-    else if (a === '--cohort') args.cohort = argv[++i];
-    else if (a === '--limit') args.limitPosts = parseInt(argv[++i] ?? '0', 10);
-    else if (a === '--out') args.outFile = argv[++i];
+    if (a === '--dry-run') args.dryRun = true;
+    else if (a === '--dump-file') args.dumpFile = argv[++i];
   }
-  if (!args.exportDir) {
-    console.error('--export-dir is required');
-    process.exit(1);
-  }
-  args.cohort ??= process.env.COHORT ?? 'AI-Ассистенты 3.0';
+  args.dumpFile ??= process.env.DUMP_FILE ?? 'data/dump.json';
   return args as Args;
 }
 
-interface StudentPayload {
+export interface StudentPayload {
   display_name: string;
   cohort: string;
   import_key: string;
+  telegram_username: string | null;
   source_message_id: string;
   city: string | null;
   country: string | null;
@@ -70,312 +67,526 @@ interface StudentPayload {
   expertise: string | null;
   hobbies: string | null;
   age: number | null;
-  status: Student['status'];
+  status: IntroFields['status'] | null;
   is_published: boolean;
 }
 
-interface WorkPayload {
-  import_key: string; // для связывания со студентом на стороне вставки
+export interface WorkPayload {
+  import_key: string;
+  cohort: string;
   title: string;
   description: string | null;
+  live_url: string | null;
+  repo_url: string | null;
+  stack: string[];
   tags: string[];
   source_message_id: string;
   posted_at: string | null;
   is_published: boolean;
 }
 
-/** Собирает payload-ы из результатов классификации, без записи в БД. */
-function buildPayloads(
-  posts: GroupedPost[],
-  classified: ClassifiedPost[],
-  cohort: string,
-): { students: StudentPayload[]; works: WorkPayload[] } {
-  const introsByAuthor = pickIntros(posts, classified);
-  const studentByKey = new Map<string, StudentPayload>();
-
-  for (const [authorName, { post, intro }] of introsByAuthor) {
-    const key = normalizeAuthorKey(authorName);
-    studentByKey.set(key, {
-      display_name: intro.name?.trim() || authorName,
-      cohort,
-      import_key: key,
-      source_message_id: `html:${post.rootMessageId}`,
-      city: intro.city ?? null,
-      country: intro.country ?? null,
-      niche: intro.niche ?? null,
-      bio: intro.bio ?? null,
-      goal: intro.goal ?? null,
-      expertise: intro.expertise ?? null,
-      hobbies: intro.hobbies ?? null,
-      age: intro.age ?? null,
-      status: intro.status ?? null,
-      is_published: true,
-    });
-  }
-
-  const works: WorkPayload[] = [];
-  for (let i = 0; i < posts.length; i++) {
-    if (classified[i]!.classified_as !== 'work') continue;
-    const post = posts[i]!;
-    const cls = classified[i]!;
-    const key = normalizeAuthorKey(post.authorName);
-    if (!studentByKey.has(key)) {
-      // Студент без intro — создаём заглушку профиля.
-      studentByKey.set(key, {
-        display_name: post.authorName,
-        cohort,
-        import_key: key,
-        source_message_id: `html:${post.rootMessageId}`,
-        city: null, country: null, niche: null, bio: null, goal: null,
-        expertise: null, hobbies: null, age: null, status: null,
-        is_published: true,
-      });
-    }
-    works.push({
-      import_key: key,
-      title: cls.work?.title?.trim() || post.text.split('\n')[0]!.slice(0, 100) || 'Без названия',
-      description: cls.work?.description ?? post.text.slice(0, 1000),
-      tags: cls.work?.tags ?? [],
-      source_message_id: `html:${post.rootMessageId}`,
-      posted_at: post.postedAt,
-      is_published: false,
-    });
-  }
-
-  return { students: [...studentByKey.values()], works };
+/** Пара «что писать» + «когда пост опубликован» — нужна mergeStudentFields для порога ручной правки. */
+interface StudentRecord {
+  payload: StudentPayload;
+  postedAt: string | null;
 }
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
-  console.log(`[import] dir=${args.exportDir}  dry-run=${args.dryRun}  cohort="${args.cohort}"`);
+interface RawRow {
+  id: string;
+  topic_id: number | null;
+  author_name: string | null;
+  text: string | null;
+  posted_at: string | null;
+  classified_as: 'intro' | 'work' | 'qa' | 'chat';
+  ingested_from: 'telegram_live';
+}
 
-  // 1. Parse HTML.
-  const messages = await parseExportDir(args.exportDir);
-  console.log(`[parse] ${messages.length} messages, ${countAuthors(messages)} authors`);
+/** FailedBatch + откуда он взялся — иначе в сводке не понять, что чинить. */
+interface FailureContext extends FailedBatch {
+  chatId: number;
+  kind: 'intro' | 'work';
+}
 
-  const writeToDb = !args.dryRun && !args.outFile;
+export function buildStudentPayload(input: {
+  chatId: number;
+  authorName: string;
+  authorUsername: string | null;
+  rootMessageId: number;
+  intro: IntroFields;
+}): StudentPayload {
+  const { chatId, authorName, authorUsername, rootMessageId, intro } = input;
+  return {
+    display_name: intro.name?.trim() || authorName.trim(),
+    cohort: cohortOf(chatId),
+    import_key: normalizeAuthorKey(authorName),
+    telegram_username: authorUsername,
+    source_message_id: `tg:${chatId}:${rootMessageId}`,
+    city: intro.city ?? null,
+    country: intro.country ?? null,
+    niche: intro.niche ?? null,
+    bio: intro.bio ?? null,
+    goal: intro.goal ?? null,
+    expertise: intro.expertise ?? null,
+    hobbies: intro.hobbies ?? null,
+    age: intro.age ?? null,
+    status: intro.status ?? null,
+    is_published: true,
+  };
+}
 
-  // 2. Insert into raw_messages (idempotent UPSERT).
-  const db = writeToDb ? getServiceClient() : null;
-  if (db) await upsertRawMessages(db, messages);
+/** Откуда пришла работа — определяет, публикуется она или остаётся черновиком. */
+export type WorkSource = 'showcase' | 'vip_personal';
 
-  // 3. Group consecutive same-author messages into logical posts.
-  const groups = groupConsecutive(messages);
-  const longPosts = groups.filter((g) => isLongPost(g));
-  console.log(`[group] ${groups.length} groups, ${longPosts.length} long posts`);
+export function buildWorkPayload(input: {
+  chatId: number;
+  importKey: string;
+  rootMessageId: number;
+  postedAt: string | null;
+  text: string;
+  /** По умолчанию 'showcase' — публичная ветка, самый частый источник. */
+  source?: WorkSource;
+  work: WorkFields;
+}): WorkPayload | null {
+  const { chatId, importKey, rootMessageId, postedAt, text, source = 'showcase', work } = input;
+  if (!work.isAnnouncement) return null;
+  // Без заголовка карточку нечем подписать — такую работу не создаём.
+  if (!work.title) return null;
 
-  // 4. LLM classify long posts.
-  const limited = args.limitPosts ? longPosts.slice(0, args.limitPosts) : longPosts;
-  console.log(`[llm] classifying ${limited.length} posts...`);
-  const classified = await classifyPosts(limited, {
-    onBatch: (done, total) => process.stdout.write(`\r[llm] ${done}/${total}`),
-  });
-  process.stdout.write('\n');
+  const urls = extractUrls(text);
+  return {
+    import_key: importKey,
+    cohort: cohortOf(chatId),
+    title: work.title,
+    description: work.description ?? null,
+    live_url: urls.liveUrl,
+    repo_url: urls.repoUrl,
+    stack: work.stack ?? [],
+    tags: work.tags ?? [],
+    source_message_id: `tg:${chatId}:${rootMessageId}`,
+    posted_at: postedAt,
+    // Ветка показа публична по замыслу организаторов — перенос на витрину
+    // не раскрывает ничего нового. Личная переписка с куратором — раскрывает,
+    // поэтому оттуда только черновики.
+    is_published: source === 'showcase',
+  };
+}
 
-  // 4b. JSON-dump режим (для вставки через внешний канал, минуя service_role).
-  if (args.outFile) {
-    const payloads = buildPayloads(limited, classified, args.cohort);
-    await writeFile(args.outFile, JSON.stringify(payloads, null, 2), 'utf8');
-    console.log(`[out] ${payloads.students.length} students, ${payloads.works.length} works → ${args.outFile}`);
-    return;
+/** Запас на расхождение часов и на задержку между постом и записью в БД. */
+const MANUAL_EDIT_THRESHOLD_MS = 60_000;
+
+/**
+ * Какие поля профиля импорт вправе записать.
+ *
+ * Пусто, если ученик редактировал профиль сам: считаем правкой всё, что
+ * произошло позже поста больше чем на порог. Также никогда не затираем
+ * заполненное поле пустым значением из импорта.
+ */
+export function mergeStudentFields(
+  payload: Record<string, unknown>,
+  existing: ({ updated_at: string } & Record<string, unknown>) | null,
+  postedAt: string | null,
+): Record<string, unknown> {
+  if (!existing) return { ...payload };
+
+  if (postedAt) {
+    const edited = Date.parse(existing.updated_at) - Date.parse(postedAt);
+    if (Number.isFinite(edited) && edited > MANUAL_EDIT_THRESHOLD_MS) return {};
   }
 
-  // 5. Build students from intros (latest non-empty wins per author).
-  const introsByAuthor = pickIntros(limited, classified);
-  console.log(`[upsert] ${introsByAuthor.size} student profiles candidate`);
-
-  // 6. Upsert students.
-  const studentIdByKey = new Map<string, string>();
-  for (const [authorName, { post, intro }] of introsByAuthor) {
-    const key = normalizeAuthorKey(authorName);
-    if (args.dryRun) {
-      studentIdByKey.set(key, `dry-${key}`);
-      console.log(
-        `[dry] student "${intro.name ?? authorName}" niche=${intro.niche ?? '-'} city=${intro.city ?? '-'}`,
-      );
-    } else {
-      const id = await upsertStudent(db!, args.cohort, authorName, key, post, intro);
-      studentIdByKey.set(key, id);
-    }
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(payload)) {
+    if (value === null || value === undefined || value === '') continue;
+    out[key] = value;
   }
+  return out;
+}
 
-  // 7. Upsert works (only for known students).
-  const works = limited.filter((g, i) => classified[i]!.classified_as === 'work');
-  let workCount = 0;
-  for (let i = 0; i < limited.length; i++) {
-    if (classified[i]!.classified_as !== 'work') continue;
-    const post = limited[i]!;
-    const cls = classified[i]!;
-    const key = normalizeAuthorKey(post.authorName);
-    const studentId = studentIdByKey.get(key);
-    if (!studentId) {
-      // У студента нет intro в выгрузке — создаём минимальный профиль на лету.
-      if (args.dryRun) {
-        console.log(`[dry] would create stub student for "${post.authorName}"`);
-        continue;
-      }
-      const id = await upsertStudent(db!, args.cohort, post.authorName, key, post, {});
-      studentIdByKey.set(key, id);
-    }
-    if (args.dryRun) {
-      console.log(`[dry] work "${cls.work?.title ?? post.text.slice(0, 40)}" by ${post.authorName}`);
-      workCount++;
+/**
+ * Нормализует live_url для сравнения на точное совпадение: без схемы, без
+ * ведущего www, без завершающего слэша, хост в нижнем регистре. Путь и
+ * query-параметры остаются как есть — они значимы (`/crm/requests` — не то
+ * же самое, что корень сайта).
+ */
+export function normalizeLiveUrl(rawUrl: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return rawUrl.trim().toLowerCase();
+  }
+  const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+  let path = parsed.pathname;
+  if (path === '/') path = '';
+  else if (path.endsWith('/')) path = path.slice(0, -1);
+  return `${host}${path}${parsed.search}`;
+}
+
+/**
+ * Схлопывает работы одного ученика с одинаковым (после нормализации)
+ * live_url, оставляя запись с самой поздней posted_at — это апдейт той же
+ * работы, а не два разных проекта.
+ *
+ * Намеренно НЕ схлопывает по домену второго уровня или платформе
+ * (nihad-legal.lovable.app и nihad-legaldesk.lovable.app — разные работы
+ * одного автора) и никогда не трогает работы без ссылки — там точное
+ * совпадение просто не с чем сравнивать.
+ */
+export function dedupeWorksByLiveUrl(works: WorkPayload[]): WorkPayload[] {
+  const withoutUrl: WorkPayload[] = [];
+  const byKey = new Map<string, WorkPayload>();
+
+  for (const work of works) {
+    if (!work.live_url) {
+      withoutUrl.push(work);
       continue;
     }
-    await upsertWork(db!, args.exportDir, studentIdByKey.get(key)!, post, cls);
-    workCount++;
+    const key = `${work.cohort}::${work.import_key}::${normalizeLiveUrl(work.live_url)}`;
+    const existing = byKey.get(key);
+    if (!existing || isNewerPost(work.posted_at, existing.posted_at)) {
+      byKey.set(key, work);
+    }
   }
-  console.log(`[done] students=${studentIdByKey.size} works=${workCount} dry-run=${args.dryRun}`);
+
+  return [...withoutUrl, ...byKey.values()];
 }
 
-function countAuthors(messages: ParsedMessage[]): number {
-  const set = new Set<string>();
-  for (const m of messages) if (m.authorName) set.add(m.authorName);
-  return set.size;
+function isNewerPost(candidate: string | null, current: string | null): boolean {
+  if (!candidate) return false;
+  if (!current) return true;
+  return Date.parse(candidate) > Date.parse(current);
 }
 
-async function upsertRawMessages(db: SupabaseClient, messages: ParsedMessage[]) {
-  const rows = messages
-    .filter((m) => !m.isService)
-    .map((m) => ({
-      id: `html:${m.messageId}`,
-      thread_id: m.threadId,
-      author_tg_id: null,
-      author_name: m.authorName,
-      text: m.text || null,
-      media: m.media.length ? m.media : null,
-      posted_at: m.postedAt,
-      classified_as: null,
-      processed_at: null,
-      ingested_from: 'html_export' as const,
-    }));
-  // Chunk to avoid request size limits.
-  for (let i = 0; i < rows.length; i += 500) {
-    const chunk = rows.slice(i, i + 500);
+async function run(args: Args): Promise<{ failures: FailureContext[] }> {
+  const chats = await readDump(args.dumpFile);
+  const students: StudentRecord[] = [];
+  const works: WorkPayload[] = [];
+  const rawRows: RawRow[] = [];
+  const failures: FailureContext[] = [];
+
+  for (const chat of chats) {
+    const usernames = usernameByAuthorName(chat);
+    const parsed = toParsedMessages(chat);
+
+    const byKind = new Map<TopicKind, ParsedMessage[]>();
+    for (const message of parsed) {
+      const kind = classifyByTopic(chat.chatId, message.threadId);
+      if (kind === 'ignore') continue;
+      const list = byKind.get(kind) ?? [];
+      list.push(message);
+      byKind.set(kind, list);
+    }
+
+    // Всё, кроме игнорируемого, попадает в аудит. Публикуется только то,
+    // что ниже превратится в students/works.
+    for (const [kind, list] of byKind) {
+      for (const m of list) {
+        rawRows.push({
+          id: `tg:${chat.chatId}:${m.messageId}`,
+          topic_id: m.threadId,
+          author_name: m.authorName,
+          text: m.text,
+          posted_at: m.postedAt,
+          classified_as: (kind === 'vip_personal' ? 'chat' : kind) as RawRow['classified_as'],
+          ingested_from: 'telegram_live',
+        });
+      }
+    }
+
+    // Представления. Короткие реплики («Ок», «Спасибо») отсекаем ДО отправки
+    // в Gemini — они не могут быть представлением, и это экономит запросы.
+    const introPosts = groupConsecutive(byKind.get('intro') ?? []).filter((p) => isLongPost(p));
+    const { results: intros, failedBatches: introFailures } = await extractIntros(introPosts);
+    for (const f of introFailures) failures.push({ ...f, chatId: chat.chatId, kind: 'intro' });
+    for (const post of introPosts) {
+      const intro = intros.get(post.rootMessageId);
+      // Второй фильтр — уже по содержимому: Gemini иногда возвращает intro
+      // с одним лишь именем для короткой реплики. Одно имя — не профиль.
+      if (!intro || !isMeaningfulIntro(intro)) continue;
+      students.push({
+        payload: buildStudentPayload({
+          chatId: chat.chatId,
+          authorName: post.authorName,
+          authorUsername: usernames.get(post.authorName) ?? null,
+          rootMessageId: post.rootMessageId,
+          intro,
+        }),
+        postedAt: post.postedAt,
+      });
+    }
+
+    // Работы из общей ветки. Тот же фильтр длины: реплика в три слова не
+    // может быть анонсом работы.
+    const workPosts = groupConsecutive(byKind.get('work') ?? []).filter((p) => isLongPost(p));
+    const { results: extracted, failedBatches: workFailures } = await extractWorks(workPosts);
+    for (const f of workFailures) failures.push({ ...f, chatId: chat.chatId, kind: 'work' });
+    for (const post of workPosts) {
+      const fields = extracted.get(post.rootMessageId);
+      if (!fields) continue;
+      const payload = buildWorkPayload({
+        chatId: chat.chatId,
+        importKey: normalizeAuthorKey(post.authorName),
+        rootMessageId: post.rootMessageId,
+        postedAt: post.postedAt,
+        text: post.text,
+        source: 'showcase',
+        work: fields,
+      });
+      if (payload) works.push(payload);
+    }
+
+    // VIP: ветка = ученик. Имя ветки даёт профиль, работы берём только из
+    // сообщений самого ученика — реплики куратора работой быть не могут.
+    const vip = byKind.get('vip_personal') ?? [];
+    const byTopic = new Map<number, ParsedMessage[]>();
+    for (const m of vip) {
+      if (m.threadId === null) continue;
+      const list = byTopic.get(m.threadId) ?? [];
+      list.push(m);
+      byTopic.set(m.threadId, list);
+    }
+
+    for (const [topicId, messages] of byTopic) {
+      const studentName = topicTitle(chat, topicId);
+      if (!studentName) continue;
+
+      students.push({
+        payload: buildStudentPayload({
+          chatId: chat.chatId,
+          authorName: studentName,
+          authorUsername: usernames.get(studentName) ?? null,
+          rootMessageId: topicId,
+          intro: {},
+        }),
+        postedAt: null,
+      });
+
+      const own = messages.filter((m) => m.authorName === studentName);
+      const ownPosts = groupConsecutive(own).filter((p) => isLongPost(p));
+      const { results: ownWorks, failedBatches: ownFailures } = await extractWorks(ownPosts);
+      for (const f of ownFailures) failures.push({ ...f, chatId: chat.chatId, kind: 'work' });
+      for (const post of ownPosts) {
+        const fields = ownWorks.get(post.rootMessageId);
+        if (!fields) continue;
+        const payload = buildWorkPayload({
+          chatId: chat.chatId,
+          importKey: normalizeAuthorKey(studentName),
+          rootMessageId: post.rootMessageId,
+          postedAt: post.postedAt,
+          text: post.text,
+          source: 'vip_personal',
+          work: fields,
+        });
+        if (payload) works.push(payload);
+      }
+    }
+  }
+
+  // Один и тот же проект нередко анонсируют, а потом дорабатывают отдельным
+  // постом — без схлопывания это дало бы на витрине две карточки одной
+  // работы с одинаковым live_url у одного ученика.
+  const dedupedWorks = dedupeWorksByLiveUrl(works);
+
+  if (args.dryRun) {
+    console.log(
+      `students: ${students.length}, works: ${dedupedWorks.length} (до дедупликации: ${works.length}), raw: ${rawRows.length}`,
+    );
+    for (const w of dedupedWorks) {
+      console.log(`  [${w.cohort}] ${w.title} — ${w.live_url ?? 'без ссылки'}`);
+    }
+    printFailureSummary(failures);
+    return { failures };
+  }
+
+  const db = getServiceClient();
+  await writeAll(db, students, dedupedWorks, rawRows);
+  printFailureSummary(failures);
+  return { failures };
+}
+
+/**
+ * Печатает сбои заметно и отдельно от обычного лога — их легко потерять
+ * в потоке [upsert]/[dry]-строк, а именно они означают, что результат
+ * неполный: часть постов до модели не дошла и в базу не попала.
+ */
+function printFailureSummary(failures: FailureContext[]): void {
+  if (failures.length === 0) return;
+  const postCount = failures.reduce((sum, f) => sum + f.rootMessageIds.length, 0);
+  console.warn('');
+  console.warn('!'.repeat(60));
+  console.warn(
+    `ВНИМАНИЕ: результат НЕПОЛНЫЙ. ${failures.length} батч(ей) LLM провалено, ${postCount} постов не обработано.`,
+  );
+  for (const f of failures) {
+    console.warn(
+      `  chat=${f.chatId} kind=${f.kind} rootMessageIds=[${f.rootMessageIds.join(',')}] error=${f.error}`,
+    );
+  }
+  console.warn('Повторный прогон импорта доберёт эти посты (raw_messages/upsert идемпотентны).');
+  console.warn('!'.repeat(60));
+  console.warn('');
+}
+
+async function writeAll(
+  db: SupabaseClient,
+  students: StudentRecord[],
+  works: WorkPayload[],
+  rawRows: RawRow[],
+): Promise<void> {
+  // raw_messages: чистый UPSERT по id, всегда безопасно перезаписать.
+  for (let i = 0; i < rawRows.length; i += 500) {
+    const chunk = rawRows.slice(i, i + 500);
     const { error } = await db.from(tbl('raw_messages')).upsert(chunk, { onConflict: 'id' });
     if (error) throw error;
   }
-  console.log(`[upsert] raw_messages: ${rows.length} rows`);
-}
+  console.log(`[upsert] raw_messages: ${rawRows.length} rows`);
 
-interface IntroPick {
-  post: GroupedPost;
-  intro: NonNullable<ClassifiedPost['intro']>;
-}
+  // students: (cohort, import_key) — select, mergeStudentFields, затем upsert
+  // только тех полей, что импорту разрешено писать.
+  const studentIdByKey = new Map<string, string>();
+  let studentCount = 0;
+  for (const { payload, postedAt } of students) {
+    const key = `${payload.cohort}::${payload.import_key}`;
+    if (studentIdByKey.has(key)) continue; // уже обработан в этом прогоне
 
-function pickIntros(posts: GroupedPost[], classified: ClassifiedPost[]): Map<string, IntroPick> {
-  // Берём наиболее "полное" intro на автора (счётчик заполненных полей).
-  const map = new Map<string, IntroPick>();
-  for (let i = 0; i < posts.length; i++) {
-    const cls = classified[i]!;
-    if (cls.classified_as !== 'intro' || !cls.intro) continue;
-    const post = posts[i]!;
-    const score = Object.values(cls.intro).filter((v) => v !== undefined && v !== '').length;
-    const existing = map.get(post.authorName);
-    if (!existing) {
-      map.set(post.authorName, { post, intro: cls.intro });
-      continue;
-    }
-    const existingScore = Object.values(existing.intro).filter((v) => v !== undefined && v !== '').length;
-    if (score > existingScore) map.set(post.authorName, { post, intro: cls.intro });
+    const id = await upsertStudent(db, payload, postedAt);
+    studentIdByKey.set(key, id);
+    studentCount++;
   }
-  return map;
+  console.log(`[upsert] students: ${studentCount} rows`);
+
+  // works: UPSERT по source_message_id, is_published передаём только на вставку.
+  let workCount = 0;
+  for (const work of works) {
+    const key = `${work.cohort}::${work.import_key}`;
+    let studentId = studentIdByKey.get(key);
+    if (!studentId) {
+      studentId = await ensureStudentStub(db, work.cohort, work.import_key, work.source_message_id);
+      studentIdByKey.set(key, studentId);
+    }
+    await upsertWork(db, studentId, work);
+    workCount++;
+  }
+  console.log(`[upsert] works: ${workCount} rows`);
 }
 
 async function upsertStudent(
   db: SupabaseClient,
-  cohort: string,
-  authorName: string,
-  importKey: string,
-  post: GroupedPost,
-  intro: ClassifiedPost['intro'] = {},
+  payload: StudentPayload,
+  postedAt: string | null,
 ): Promise<string> {
-  const { data: existing } = await db
+  const { cohort, import_key, ...rest } = payload;
+  const { data: existing, error: selectError } = await db
     .from(tbl('students'))
-    .select('id, updated_at, source_message_id')
+    .select('id, updated_at')
     .eq('cohort', cohort)
-    .eq('import_key', importKey)
+    .eq('import_key', import_key)
     .maybeSingle();
-
-  const display = intro?.name?.trim() || authorName;
-  const payload: Partial<Student> = {
-    display_name: display,
-    cohort,
-    import_key: importKey,
-    source_message_id: `html:${post.rootMessageId}`,
-    city: intro?.city ?? null,
-    country: intro?.country ?? null,
-    niche: intro?.niche ?? null,
-    bio: intro?.bio ?? null,
-    goal: intro?.goal ?? null,
-    expertise: intro?.expertise ?? null,
-    hobbies: intro?.hobbies ?? null,
-    age: intro?.age ?? null,
-    status: intro?.status ?? null,
-    is_published: true,
-  };
+  if (selectError) throw selectError;
 
   if (existing) {
-    // Если профиль был отредактирован студентом через бот (updated_at заметно
-    // позже posted_at оригинального intro) — не перетираем поля.
-    const editedByUser =
-      post.postedAt && Date.parse(existing.updated_at) - Date.parse(post.postedAt) > 60_000;
-    if (editedByUser) return existing.id;
-
-    const { error } = await db.from(tbl('students')).update(payload).eq('id', existing.id);
-    if (error) throw error;
-    return existing.id;
+    const merged = mergeStudentFields(rest, existing as { updated_at: string }, postedAt);
+    if (Object.keys(merged).length > 0) {
+      const { error } = await db.from(tbl('students')).update(merged).eq('id', existing.id);
+      if (error) throw error;
+    }
+    return existing.id as string;
   }
 
   const { data, error } = await db
     .from(tbl('students'))
-    .insert(payload)
+    .insert({ cohort, import_key, ...rest })
     .select('id')
     .single();
   if (error) throw error;
-  return data!.id;
+  return data!.id as string;
 }
 
-async function upsertWork(
+/** Работа пришла раньше intro автора (или его вообще не было) — заводим минимальный профиль. */
+async function ensureStudentStub(
   db: SupabaseClient,
-  exportDir: string,
-  studentId: string,
-  post: GroupedPost,
-  cls: ClassifiedPost,
-): Promise<void> {
-  const sourceId = `html:${post.rootMessageId}`;
-  const title = cls.work?.title?.trim() || post.text.split('\n')[0]!.slice(0, 100) || 'Без названия';
+  cohort: string,
+  importKey: string,
+  sourceMessageId: string,
+): Promise<string> {
+  const { data: existing, error: selectError } = await db
+    .from(tbl('students'))
+    .select('id')
+    .eq('cohort', cohort)
+    .eq('import_key', importKey)
+    .maybeSingle();
+  if (selectError) throw selectError;
+  if (existing) return existing.id as string;
 
-  // Загружаем медиа в Storage и собираем итоговый MediaItem[].
-  const media: MediaItem[] = [];
-  for (const m of post.media) {
-    if (m.type !== 'image' && m.type !== 'video' && m.type !== 'file') continue;
-    const url = await uploadFromExport(db, exportDir, m.path, studentId, sourceId);
-    if (!url) continue;
-    const itemType: MediaItem['type'] = m.type === 'file'
-      ? (/\.pdf$/i.test(m.path) ? 'pdf' : 'link')
-      : (m.type as 'image' | 'video');
-    media.push({ type: itemType, url, caption: m.filename });
+  const { data, error } = await db
+    .from(tbl('students'))
+    .insert({
+      cohort,
+      import_key: importKey,
+      display_name: importKey,
+      telegram_username: null,
+      source_message_id: sourceMessageId,
+      city: null,
+      country: null,
+      niche: null,
+      bio: null,
+      goal: null,
+      expertise: null,
+      hobbies: null,
+      age: null,
+      status: null,
+      is_published: true,
+    })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data!.id as string;
+}
+
+async function upsertWork(db: SupabaseClient, studentId: string, work: WorkPayload): Promise<void> {
+  const { import_key: _importKey, cohort: _cohort, is_published, ...rest } = work;
+
+  const { data: existing, error: selectError } = await db
+    .from(tbl('works'))
+    .select('id')
+    .eq('source_message_id', work.source_message_id)
+    .maybeSingle();
+  if (selectError) throw selectError;
+
+  if (existing) {
+    // is_published сознательно не трогаем: повторный импорт не должен
+    // ни снимать с витрины опубликованное учеником, ни публиковать спрятанное.
+    const { error } = await db
+      .from(tbl('works'))
+      .update({ student_id: studentId, ...rest })
+      .eq('id', existing.id);
+    if (error) throw error;
+    return;
   }
 
-  const payload = {
-    student_id: studentId,
-    title,
-    description: cls.work?.description ?? post.text.slice(0, 1000),
-    media,
-    tags: cls.work?.tags ?? [],
-    source_message_id: sourceId,
-    posted_at: post.postedAt,
-    is_published: false, // спека: импортированные работы по умолчанию скрыты
-  };
-
-  const { error } = await db
-    .from(tbl('works'))
-    .upsert(payload, { onConflict: 'source_message_id' });
+  const { error } = await db.from(tbl('works')).insert({ student_id: studentId, is_published, ...rest });
   if (error) throw error;
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+async function main(): Promise<void> {
+  const args = parseArgs(process.argv.slice(2));
+  console.log(`[import] dump=${args.dumpFile}  dry-run=${args.dryRun}`);
+  const { failures } = await run(args);
+  if (failures.length > 0 && !args.dryRun) {
+    // Данные, которые удалось извлечь, уже записаны — но молча рапортовать
+    // об успехе на неполном результате нельзя: вызывающий (cron, оператор)
+    // должен увидеть ненулевой код и разобраться, что не обработалось.
+    process.exitCode = 1;
+  }
+}
+
+// Запускать только при прямом вызове (`tsx scripts/import.ts`), не при
+// импорте чистых функций тестами (`scripts/test/import.test.ts`). Путь к
+// репозиторию содержит кириллицу и пробелы — сравниваем декодированные пути,
+// а не сырой `file://` URL, иначе процентное экранирование ломает сравнение.
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+if (isMain) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}

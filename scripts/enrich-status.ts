@@ -11,8 +11,8 @@
  */
 
 import 'dotenv/config';
-import { getServiceClient, tbl, type Student } from '@web3nity/db';
-import { inferStatuses, type StatusInput } from '@web3nity/parser';
+import { getServiceClient, tbl, type Student } from '@vibe/db';
+import { inferStatuses, type StatusInput } from '@vibe/parser';
 
 const DRY = process.argv.includes('--dry') || process.argv.includes('--dry-run');
 

@@ -1,9 +1,18 @@
 import { serviceClient } from './auth';
 
+/**
+ * Префикс имён storage-бакетов (бакеты глобальны на проект).
+ * Должен совпадать с SUPABASE_BUCKET_PREFIX в backend (packages/db BUCKET_PREFIX).
+ */
+export const BUCKET_PREFIX = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_PREFIX ?? '';
+export function bkt(name: string): string {
+  return BUCKET_PREFIX + name;
+}
+
 /** Публичный бакет для медиа работ (см. packages/db bucket('works-media')). */
-const BUCKET = 'web3nity-works-media';
+const BUCKET = bkt('works-media');
 /** Публичный бакет для аватаров профиля. */
-const AVATAR_BUCKET = 'web3nity-students-avatars';
+const AVATAR_BUCKET = bkt('students-avatars');
 const MAX_BYTES = 15 * 1024 * 1024;
 const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
 

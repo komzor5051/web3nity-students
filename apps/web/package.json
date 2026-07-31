@@ -1,5 +1,5 @@
 {
-  "name": "@web3nity/web",
+  "name": "@vibe/web",
   "version": "0.0.1",
   "private": true,
   "scripts": {
@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.46.0",
-    "@web3nity/db": "*",
+    "@vibe/db": "*",
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

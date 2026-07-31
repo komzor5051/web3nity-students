@@ -1,4 +1,4 @@
-// Внутренние типы парсера. Не путать с DB-типами в @web3nity/db/types.
+// Внутренние типы парсера. Не путать с DB-типами в @vibe/db/types.
 
 export interface ParsedMedia {
   /**

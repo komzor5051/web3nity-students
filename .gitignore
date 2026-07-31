@@ -12,5 +12,8 @@ coverage/
 .cache/
 imports/
 
+# telegram dump — содержит личную переписку из VIP-чата
+data/
+
 # build artefacts
 *.tsbuildinfo

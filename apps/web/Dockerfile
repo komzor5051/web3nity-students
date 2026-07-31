@@ -1,5 +1,5 @@
 # Multi-stage build for Next.js standalone output in npm workspace.
-# Build context = repo root (web3nity-students/).
+# Build context = repo root (vibecoding-students/).
 
 FROM node:20-alpine AS deps
 WORKDIR /app
@@ -17,14 +17,16 @@ WORKDIR /app
 ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 ARG NEXT_PUBLIC_SUPABASE_TABLE_PREFIX
+ARG NEXT_PUBLIC_SUPABASE_BUCKET_PREFIX
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 ENV NEXT_PUBLIC_SUPABASE_TABLE_PREFIX=$NEXT_PUBLIC_SUPABASE_TABLE_PREFIX
+ENV NEXT_PUBLIC_SUPABASE_BUCKET_PREFIX=$NEXT_PUBLIC_SUPABASE_BUCKET_PREFIX
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps ./apps
 COPY --from=deps /app/packages ./packages
 COPY . .
-RUN npm run build --workspace=@web3nity/web
+RUN npm run build --workspace=@vibe/web
 
 FROM node:20-alpine AS runner
 WORKDIR /app

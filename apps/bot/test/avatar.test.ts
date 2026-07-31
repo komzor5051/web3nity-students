@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Student } from '@web3nity/db';
+import type { Student } from '@vibe/db';
 import { pickLargestPhotoFileId, ensureAvatar, type AvatarCtx } from '../src/avatar.js';
 
 function student(over: Partial<Student> = {}): Student {

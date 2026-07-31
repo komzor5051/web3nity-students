@@ -29,7 +29,7 @@ export interface StatusOut {
 
 const VALID: Status[] = ['looking_for_clients', 'looking_for_partners', 'just_learning'];
 
-const SYSTEM_PROMPT = `Ты размечаешь намерение участников курса "AI-Ассистенты 3.0" по их профилю.
+const SYSTEM_PROMPT = `Ты размечаешь намерение участников курса по вайб-кодингу по их профилю.
 
 На вход — профили (ниша, био, цель, опыт). Для каждого определи ОДИН доминирующий статус ИЛИ оставь пустым.
 

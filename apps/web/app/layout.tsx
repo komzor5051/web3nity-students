@@ -4,11 +4,11 @@ import Link from 'next/link';
 import { getCurrentStudent } from '@/lib/auth';
 
 export const metadata: Metadata = {
-  title: 'Ученики — Web3nity School',
-  description: 'Витрина учеников Web3nity School. Профили, ниши, кейсы.',
+  title: 'Ученики — курс по вайб-кодингу',
+  description: 'Работы учеников курса по вайб-кодингу: сайты, сервисы, боты.',
   openGraph: {
-    title: 'Ученики — Web3nity School',
-    description: 'Витрина учеников Web3nity School.',
+    title: 'Ученики — курс по вайб-кодингу',
+    description: 'Работы учеников курса по вайб-кодингу.',
     type: 'website',
   },
 };
@@ -21,19 +21,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="ru">
       <head>
         <link
-          href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300..700&family=Playfair+Display:wght@600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300..700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
           rel="stylesheet"
         />
       </head>
       <body className="min-h-screen bg-bg text-ink">
         <header className="bg-surface border-b border-line h-[58px] px-6 sm:px-10 flex items-center justify-between sticky top-0 z-30">
           <Link
-            href="/students"
-            aria-label="На главную — ученики Web3nity School"
+            href="/"
+            aria-label="На главную — ученики курса по вайб-кодингу"
             className="flex items-center gap-2 font-bold text-[13px] tracking-[.5px] -my-2 py-2 pr-2 select-none touch-manipulation"
           >
-            <span className="w-7 h-7 bg-accent rounded-[7px] flex items-center justify-center text-white text-[12px] shrink-0">W</span>
-            <span className="whitespace-nowrap">WEB3NITY SCHOOL</span>
+            <span className="w-7 h-7 bg-accent rounded-sm shrink-0" />
+            <span className="whitespace-nowrap font-mono">ВАЙБ-КОДИНГ</span>
           </Link>
           <div className="flex items-center gap-3 text-[13px] text-text2">
             {me ? (

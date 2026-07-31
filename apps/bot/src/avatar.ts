@@ -6,7 +6,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { tbl, bucket, type Student } from '@web3nity/db';
+import { tbl, bucket, type Student } from '@vibe/db';
 
 /** Размер фото профиля в ответе getUserProfilePhotos. */
 interface PhotoSize {

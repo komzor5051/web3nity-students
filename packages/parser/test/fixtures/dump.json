@@ -1,0 +1,56 @@
+{
+  "generated_at": "2026-07-30T12:00:00Z",
+  "chats": [
+    {
+      "chat_id": -1004353204500,
+      "title": "VIBECODING",
+      "topics": { "11": "SHOW CASE STUDIO", "10": "Нетворкинг" },
+      "messages": [
+        {
+          "message_id": 100,
+          "topic_id": 10,
+          "author_id": 555,
+          "author_name": "Денис Колесников",
+          "author_username": "KolesnikovGroup",
+          "posted_at": "2026-06-28T10:00:00+00:00",
+          "text": "Денис Колесников, Южно-Сахалинск, оптовая торговля стройматериалами.",
+          "has_media": false,
+          "reply_to_id": null
+        },
+        {
+          "message_id": 101,
+          "topic_id": 10,
+          "author_id": 555,
+          "author_name": "Денис Колесников",
+          "author_username": "KolesnikovGroup",
+          "posted_at": "2026-06-28T10:01:00+00:00",
+          "text": "Учусь, от клиентов не отказываюсь.",
+          "has_media": false,
+          "reply_to_id": null
+        },
+        {
+          "message_id": 200,
+          "topic_id": 11,
+          "author_id": 777,
+          "author_name": "Dmitry",
+          "author_username": "KotBegemot1977",
+          "posted_at": "2026-06-29T09:00:00+00:00",
+          "text": "Мой проект https://www.hard-iron.ru готов.",
+          "has_media": true,
+          "reply_to_id": null
+        },
+        {
+          "message_id": 201,
+          "topic_id": 11,
+          "author_id": 888,
+          "author_name": "Куратор",
+          "author_username": null,
+          "posted_at": "2026-06-29T09:05:00+00:00",
+          "text": "Здорово, очень понятная задача!",
+          "has_media": false,
+          "reply_to_id": 200
+        }
+      ]
+    }
+  ]
+}

@@ -17,8 +17,8 @@ export type DirItem = {
   goal: string | null;
   status: 'looking_for_clients' | 'looking_for_partners' | 'just_learning' | null;
   telegram: string | null;
-  avatarColor: string;
   avatarUrl: string | null;
+  workCount: number;
 };
 
 type StatusKey = 'all' | 'learning' | 'cofounder' | 'client' | 'none';
@@ -64,9 +64,9 @@ function statusText(s: DirItem['status']): string {
 
 function statusColor(s: DirItem['status']): { dot: string; text: string } {
   const k = statusKey(s);
-  if (k === 'learning') return { dot: 'bg-green', text: 'text-green' };
-  if (k === 'cofounder') return { dot: 'bg-purple', text: 'text-purple' };
-  if (k === 'client') return { dot: 'bg-blue', text: 'text-blue' };
+  if (k === 'learning') return { dot: 'bg-accent', text: 'text-accent' };
+  if (k === 'cofounder') return { dot: 'bg-accent', text: 'text-accent' };
+  if (k === 'client') return { dot: 'bg-accent', text: 'text-accent' };
   return { dot: 'bg-text3', text: 'text-text3' };
 }
 
@@ -83,6 +83,7 @@ export default function Directory({
   const [sphere, setSphere] = useState<string>('all');
   const [region, setRegion] = useState<string>('Все');
   const [q, setQ] = useState<string>('');
+  const [onlyWithWorks, setOnlyWithWorks] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [recsOpen, setRecsOpen] = useState(false);
 
@@ -125,6 +126,7 @@ export default function Directory({
     );
     return hay.includes(term);
   };
+  const okWorks = (i: DirItem) => !onlyWithWorks || i.workCount > 0;
 
   // Фасетные счётчики: для каждого фильтра учитываем все ОСТАЛЬНЫЕ активные
   // фильтры, но не сам фильтр (иначе у активного чипа всегда стоял бы его же
@@ -164,8 +166,8 @@ export default function Directory({
   }, [items, status, sphere, term]);
 
   const filtered = useMemo(
-    () => items.filter((i) => okStatus(i) && okSphere(i) && okRegion(i) && okSearch(i)),
-    [items, status, sphere, region, term],
+    () => items.filter((i) => okStatus(i) && okSphere(i) && okRegion(i) && okSearch(i) && okWorks(i)),
+    [items, status, sphere, region, term, onlyWithWorks],
   );
 
   const opened = openId ? items.find((i) => i.id === openId) ?? null : null;
@@ -173,15 +175,15 @@ export default function Directory({
   return (
     <div className="max-w-[1260px] mx-auto px-6 sm:px-10 py-7 overflow-x-clip">
       <section className="mb-6">
-        <h1 className="font-display text-[28px] mb-1.5">Ученики Web3nity School</h1>
+        <h1 className="font-mono text-[28px] mb-1.5">Ученики курса по вайб-кодингу</h1>
         <p className="text-text2 text-sm">
           Познакомьтесь с другими учениками, найдите партнёров, клиентов или единомышленников.
           Напишите любому напрямую в Telegram.
         </p>
         <div className="flex flex-wrap gap-4 mt-2.5 text-[13px] text-text3">
           <StatBadge color="bg-accent" label={`${stats.total} ученик${plural(stats.total)}`} />
-          <StatBadge color="bg-green" label={`${stats.countries} стран`} />
-          <StatBadge color="bg-blue" label={`${stats.spheres} сфер`} />
+          <StatBadge color="bg-accent" label={`${stats.countries} стран`} />
+          <StatBadge color="bg-accent" label={`${stats.spheres} сфер`} />
         </div>
       </section>
 
@@ -198,7 +200,7 @@ export default function Directory({
       )}
 
       <div className="flex items-center justify-between mb-3.5">
-        <h2 className="font-display text-[20px]">Все ученики</h2>
+        <h2 className="font-mono text-[20px]">Все ученики</h2>
         <span className="text-[12px] text-text3">{filtered.length} чел.</span>
       </div>
 
@@ -244,12 +246,22 @@ export default function Directory({
             </Chip>
           ))}
         </FilterGroup>
+
+        <label className="flex items-center gap-2 text-[12px] text-text2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={onlyWithWorks}
+            onChange={(e) => setOnlyWithWorks(e.target.checked)}
+            className="accent-accent"
+          />
+          Только с работами
+        </label>
       </div>
 
       {filtered.length === 0 ? (
         <div className="text-center py-12 text-text3">
           <div className="text-3xl mb-2">·</div>
-          <h3 className="text-[15px] text-text2 mb-1">Никого не нашли</h3>
+          <h3 className="font-mono text-[15px] text-text2 mb-1">Никого не нашли</h3>
           <p className="text-[13px]">Попробуйте изменить фильтры</p>
         </div>
       ) : (
@@ -282,9 +294,9 @@ function RecsModal({
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 bg-black/35 backdrop-blur-[4px] z-40 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-ink/40 backdrop-blur-[4px] z-40 flex items-center justify-center p-4"
     >
-      <div className="bg-surface rounded-lg w-[560px] max-w-full max-h-[85vh] overflow-y-auto shadow-lg relative">
+      <div className="bg-surface border border-line rounded-lg w-[560px] max-w-full max-h-[85vh] overflow-y-auto relative">
         <button
           onClick={onClose}
           className="absolute top-3.5 right-3.5 bg-surface-hover w-7 h-7 rounded-full text-text2 text-[13px] flex items-center justify-center hover:bg-line"
@@ -292,9 +304,9 @@ function RecsModal({
           ✕
         </button>
         <div className="px-6 pt-6 pb-2">
-          <h2 className="font-display text-[20px] mb-0.5">Ваши рекомендации</h2>
+          <h2 className="font-mono text-[20px] mb-0.5">Ваши рекомендации</h2>
           <p className="text-[13px] text-text2">
-            Ученики Web3nity School, с которыми вам стоит познакомиться.
+            Ученики курса по вайб-кодингу, с которыми вам стоит познакомиться.
           </p>
         </div>
         <ul className="px-6 py-4 space-y-3">
@@ -325,7 +337,7 @@ function RecsModal({
                       </a>
                     )}
                     <Link
-                      href={`/students/${item.slug}`}
+                      href={`/s/${item.slug}`}
                       className="text-[12px] px-3 py-1.5 rounded-full border border-line text-text2 hover:border-accent hover:text-accent"
                     >
                       Открыть профиль
@@ -409,7 +421,7 @@ function Card({ item, index, isMe, onOpen }: { item: DirItem; index: number; isM
   return (
     <button
       onClick={onOpen}
-      className={`w3n-card-anim text-left w-full bg-surface border rounded p-[18px] hover:shadow-md hover:-translate-y-0.5 transition-all ${
+      className={`vibe-card-anim text-left w-full bg-surface border rounded p-[18px] hover:border-accent hover:-translate-y-0.5 transition-all ${
         isMe ? 'border-accent' : 'border-line'
       }`}
       style={{ animationDelay: `${index * 0.03}s` }}
@@ -444,9 +456,12 @@ function Card({ item, index, isMe, onOpen }: { item: DirItem; index: number; isM
         </div>
       )}
       <div className="flex justify-between items-center pt-2.5 border-t border-line-light">
-        <div className={`flex items-center gap-1.5 text-[11px] font-medium ${color.text}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${color.dot}`} />
-          {statusText(item.status)}
+        <div className="flex items-center gap-2.5">
+          <div className={`flex items-center gap-1.5 text-[11px] font-medium ${color.text}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${color.dot}`} />
+            {statusText(item.status)}
+          </div>
+          <span className="font-mono text-[12px] text-text3">{item.workCount} работ</span>
         </div>
         {item.telegram ? (
           <a
@@ -481,12 +496,11 @@ function Avatar({ item, size, radius }: { item: DirItem; size: number; radius: n
   }
   return (
     <div
-      className="flex items-center justify-center text-white font-semibold flex-shrink-0"
+      className="flex items-center justify-center bg-accent-light text-accent font-mono font-semibold flex-shrink-0"
       style={{
         width: size,
         height: size,
         borderRadius: radius,
-        background: item.avatarColor,
         fontSize: size * 0.38,
       }}
     >
@@ -519,9 +533,9 @@ function Modal({ item, onClose }: { item: DirItem; onClose: () => void }) {
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 bg-black/35 backdrop-blur-[4px] z-40 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-ink/40 backdrop-blur-[4px] z-40 flex items-center justify-center p-4"
     >
-      <div className="bg-surface rounded-lg w-[500px] max-w-full max-h-[85vh] overflow-y-auto shadow-lg relative">
+      <div className="bg-surface border border-line rounded-lg w-[500px] max-w-full max-h-[85vh] overflow-y-auto relative">
         <button
           onClick={onClose}
           className="absolute top-3.5 right-3.5 bg-surface-hover w-7 h-7 rounded-full text-text2 text-[13px] flex items-center justify-center hover:bg-line"
@@ -531,7 +545,7 @@ function Modal({ item, onClose }: { item: DirItem; onClose: () => void }) {
         <div className="px-6 pt-6 flex gap-3.5">
           <Avatar item={item} size={52} radius={13} />
           <div>
-            <h2 className="font-display text-[20px] mb-0.5">{item.name}</h2>
+            <h2 className="font-mono text-[20px] mb-0.5">{item.name}</h2>
             <div className="text-[13px] text-text2">
               {[item.city, item.country].filter(Boolean).join(', ')}
               {item.sphere ? ` · ${item.sphere}` : ''}
@@ -578,7 +592,7 @@ function Modal({ item, onClose }: { item: DirItem; onClose: () => void }) {
               </span>
             )}
             <Link
-              href={`/students/${item.slug}`}
+              href={`/s/${item.slug}`}
               className="px-4 py-2.5 rounded-sm bg-surface border border-line text-[13px] text-text2 hover:bg-surface-hover"
             >
               Открыть

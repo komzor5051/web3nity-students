@@ -5,8 +5,8 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { tbl, type Student } from '@web3nity/db';
-import { normalizeAuthorKey } from '@web3nity/parser';
+import { tbl, type Student } from '@vibe/db';
+import { normalizeAuthorKey } from '@vibe/parser';
 
 const COHORT = process.env.COHORT ?? 'AI-Ассистенты 3.0';
 

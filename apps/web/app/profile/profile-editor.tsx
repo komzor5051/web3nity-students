@@ -30,7 +30,7 @@ export default function ProfileEditor({ student }: { student: StudentRow }) {
 
   return (
     <form action={formAction} className="bg-surface border border-line rounded-lg p-6">
-      <h2 className="font-display text-xl mb-5">Профиль</h2>
+      <h2 className="font-mono text-xl mb-5">Профиль</h2>
 
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
@@ -94,8 +94,8 @@ export default function ProfileEditor({ student }: { student: StudentRow }) {
 
       <div className="mt-5 flex items-center gap-3">
         <SaveButton />
-        {state?.ok === true && <span className="text-green text-sm">Сохранено</span>}
-        {state?.ok === false && <span className="text-red-600 text-sm">{state.error}</span>}
+        {state?.ok === true && <span className="text-accent text-sm">Сохранено</span>}
+        {state?.ok === false && <span className="text-ink font-semibold text-sm">{state.error}</span>}
       </div>
     </form>
   );

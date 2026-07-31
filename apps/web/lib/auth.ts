@@ -56,7 +56,12 @@ export async function pollAuthToken(token: string): Promise<
     .maybeSingle();
   if (!data) return { status: 'expired' };
   if (!data.confirmed_at) {
-    if (new Date(data.expires_at) < new Date()) return { status: 'expired' };
+    if (new Date(data.expires_at) < new Date()) {
+      // Просроченный неподтверждённый токен больше никогда не станет валидным —
+      // удаляем сразу, иначе таблица бесконечно растёт мусором.
+      await svc.from(tbl('web_auth_tokens')).delete().eq('token', token);
+      return { status: 'expired' };
+    }
     return { status: 'pending' };
   }
   if (!data.student_id) return { status: 'expired' };

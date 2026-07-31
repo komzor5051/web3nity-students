@@ -49,6 +49,16 @@ export interface Work {
   is_published: boolean;
   created_at: string;
   updated_at: string;
+  /** URL живого сайта. null, если работа не веб-проект (таблица, бот, презентация). */
+  live_url: string | null;
+  /** URL репозитория. */
+  repo_url: string | null;
+  /** Путь в бакете works-media до скриншота. */
+  screenshot_path: string | null;
+  /** true если снять скриншот не удалось — карточка рисует заглушку. */
+  screenshot_failed: boolean;
+  /** Инструменты и технологии: ["claude code", "next.js"]. */
+  stack: string[];
 }
 
 export type RawMessageClass = 'intro' | 'work' | 'qa' | 'chat';
@@ -63,7 +73,9 @@ export interface RawMessage {
   posted_at: string | null;
   classified_as: RawMessageClass | null;
   processed_at: string | null;
-  ingested_from: 'html_export' | 'bot_pull';
+  /** topic_id ветки форума, из которой пришло сообщение. */
+  topic_id: number | null;
+  ingested_from: 'html_export' | 'bot_pull' | 'telegram_live';
 }
 
 export interface Tag {

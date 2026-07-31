@@ -41,7 +41,7 @@ export default function AvatarUploader({
         title="Сменить фото"
       >
         <Avatar name={name} url={url} />
-        <span className="absolute inset-0 bg-black/40 text-white text-[11px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+        <span className="absolute inset-0 bg-ink/40 text-white text-[11px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
           Сменить
         </span>
       </button>
@@ -56,10 +56,10 @@ export default function AvatarUploader({
         />
         <UploadButton />
         {state?.ok === false && (
-          <span className="text-red-600 text-[11px]">{state.error}</span>
+          <span className="text-ink font-semibold text-[11px]">{state.error}</span>
         )}
         {state?.ok === true && (
-          <span className="text-green text-[11px]">Фото обновлено</span>
+          <span className="text-accent text-[11px]">Фото обновлено</span>
         )}
         <span className="text-[11px] text-text3">JPG / PNG / WebP, до 5 МБ</span>
       </div>

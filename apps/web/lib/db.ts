@@ -15,7 +15,7 @@ export const supabase = createClient(url ?? 'http://localhost', anon ?? 'anon', 
 
 /**
  * Префикс таблиц. Пусто = выделенный Supabase-проект.
- * `web3nity_` = временное размещение в общем проекте lvmn-hub.
+ * `vibe_` = временное размещение в общем проекте lvmn-hub.
  * Должен совпадать с SUPABASE_TABLE_PREFIX в backend (.env).
  */
 export const TABLE_PREFIX = process.env.NEXT_PUBLIC_SUPABASE_TABLE_PREFIX ?? '';
@@ -54,6 +54,11 @@ export type WorkRow = {
   posted_at: string | null;
   is_published: boolean;
   updated_at: string;
+  live_url: string | null;
+  repo_url: string | null;
+  screenshot_path: string | null;
+  screenshot_failed: boolean;
+  stack: string[];
 };
 
 /** Транслит для slug, если у студента нет telegram_username. */
@@ -73,8 +78,16 @@ export function transliterate(s: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
+/**
+ * Публичный slug ученика. С telegram_username всегда уникален (Telegram сам
+ * это гарантирует). Без него — транслит имени НЕ уникален: два Ивана Петрова
+ * или один ученик на двух тарифах дадут коллизию, и второй профиль станет
+ * недоступен (совпадение отдаётся первому найденному). Поэтому всегда
+ * добавляем короткий суффикс из id — он уникален по построению.
+ */
 export function studentSlug(s: Pick<StudentRow, 'telegram_username' | 'display_name' | 'id'>): string {
   if (s.telegram_username) return s.telegram_username.toLowerCase();
   const tr = transliterate(s.display_name);
-  return tr || s.id.slice(0, 8);
+  const suffix = s.id.replace(/-/g, '').slice(0, 6);
+  return tr ? `${tr}-${suffix}` : suffix;
 }

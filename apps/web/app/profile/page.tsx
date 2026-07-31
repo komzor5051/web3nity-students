@@ -26,14 +26,14 @@ export default async function ProfilePage() {
       <div className="flex flex-col sm:flex-row sm:items-start gap-4">
         <AvatarUploader name={me.display_name} url={me.avatar_url} />
         <div className="min-w-0 flex-1">
-          <h1 className="font-display text-2xl">{me.display_name}</h1>
+          <h1 className="font-mono text-2xl">{me.display_name}</h1>
           <div className="text-text2 text-sm">
-            {[me.niche, me.city || me.country].filter(Boolean).join(' · ') || 'Профиль ученика Web3nity School'}
+            {[me.niche, me.city || me.country].filter(Boolean).join(' · ') || 'Профиль ученика курса по вайб-кодингу'}
           </div>
           <div className="mt-3 flex gap-2 flex-wrap items-center">
             {me.is_published ? (
               <Link
-                href={`/students/${slug}`}
+                href={`/s/${slug}`}
                 className="text-xs px-3 py-1 rounded-full border border-line hover:border-accent hover:text-accent"
               >
                 Открыть публичную страницу
