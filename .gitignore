@@ -17,3 +17,4 @@ data/
 
 # build artefacts
 *.tsbuildinfo
+.vercel

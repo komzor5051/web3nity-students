@@ -77,6 +77,9 @@ const NOISE_LINE = /^[\s\p{Emoji_Presentation}\p{Extended_Pictographic}*_~`#>\-�
 
 function cleanLine(line: string): string {
   return line
+    // Ссылка посреди строки в заголовке карточки только мешает: адрес и так
+    // показан отдельной кнопкой («https://site.app вот мой сайт» → «вот мой сайт»).
+    .replace(/https?:\/\/\S+/gi, ' ')
     // markdown-разметка и ведущие маркеры списка
     .replace(/^[\s*_~`#>\-—–•·]+/u, '')
     .replace(/[*_~`]+$/u, '')

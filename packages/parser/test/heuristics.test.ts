@@ -150,3 +150,11 @@ describe('workFrom с приветствием вместо текста', () =>
     expect(work.title).toBe('Kavkaz Route Hub');
   });
 });
+
+describe('ссылка внутри строки', () => {
+  it('не попадает в заголовок', () => {
+    expect(titleFrom('https://ekaterinaallard.abacusai.app/ вот мой сайт но на абакус.')).toBe(
+      'вот мой сайт но на абакус.',
+    );
+  });
+});
