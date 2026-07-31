@@ -31,8 +31,13 @@ import {
   extractIntros,
   extractWorks,
   isMeaningfulIntro,
+  introFrom,
+  workFrom,
+  type ExtractResult,
+  type GroupedPost,
   type IntroFields,
   type WorkFields,
+  type ChatDump,
   type ParsedMessage,
   type TopicKind,
   type FailedBatch,
@@ -42,13 +47,16 @@ import { getServiceClient, tbl } from '@vibe/db';
 interface Args {
   dumpFile: string;
   dryRun: boolean;
+  /** Разбирать через Gemini. По умолчанию работают правила из heuristics.ts. */
+  useLlm: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Partial<Args> = { dryRun: false };
+  const args: Partial<Args> = { dryRun: false, useLlm: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--dry-run') args.dryRun = true;
+    else if (a === '--llm') args.useLlm = true;
     else if (a === '--dump-file') args.dumpFile = argv[++i];
   }
   args.dumpFile ??= process.env.DUMP_FILE ?? 'data/dump.json';
@@ -139,11 +147,6 @@ export function buildStudentPayload(input: {
 }
 
 /**
- * Чей это VIP-топик. Ветка названа именем ученика, но пишут в неё и куратор,
- * и бывают тёзки — поэтому владельцем считаем самого активного автора,
- * пишущего под именем ветки. null, если под этим именем в ветке никто не писал.
- */
-/**
  * Прогресс разбора. Без него прогон молчит десятки минут, и отличить работу
  * от зависания можно только по открытым сокетам процесса — так и было.
  */
@@ -151,6 +154,31 @@ function progress(label: string): (done: number, total: number) => void {
   return (done, total) => console.log(`[extract] ${label}: ${done}/${total}`);
 }
 
+/**
+ * Разбор постов: правилами или через Gemini.
+ *
+ * По умолчанию правила. Они не понимают смысл, но и не выдумывают, работают
+ * мгновенно и не зависят от чужого сервиса — а тип поста нам и так известен
+ * из ветки форума, так что модели оставалось немного.
+ */
+function extractBy<T>(
+  posts: GroupedPost[],
+  rule: (post: GroupedPost) => T,
+  llm: () => Promise<ExtractResult<T>>,
+  useLlm: boolean,
+): Promise<ExtractResult<T>> {
+  if (useLlm) return llm();
+  return Promise.resolve({
+    results: new Map(posts.map((p) => [p.rootMessageId, rule(p)])),
+    failedBatches: [],
+  });
+}
+
+/**
+ * Чей это VIP-топик. Ветка названа именем ученика, но пишут в неё и куратор,
+ * и бывают тёзки — поэтому владельцем считаем самого активного автора,
+ * пишущего под именем ветки. null, если под этим именем в ветке никто не писал.
+ */
 export function resolveTopicOwnerId(
   messages: ParsedMessage[],
   topicTitleName: string,
@@ -338,9 +366,12 @@ async function run(args: Args): Promise<{ failures: FailureContext[] }> {
     // Представления. Короткие реплики («Ок», «Спасибо») отсекаем ДО отправки
     // в Gemini — они не могут быть представлением, и это экономит запросы.
     const introPosts = groupConsecutive(byKind.get('intro') ?? []).filter((p) => isLongPost(p));
-    const { results: intros, failedBatches: introFailures } = await extractIntros(introPosts, {
-      onBatch: progress(`представления ${chat.title}`),
-    });
+    const { results: intros, failedBatches: introFailures } = await extractBy(
+      introPosts,
+      introFrom,
+      () => extractIntros(introPosts, { onBatch: progress(`представления ${chat.title}`) }),
+      args.useLlm,
+    );
     for (const f of introFailures) failures.push({ ...f, chatId: chat.chatId, kind: 'intro' });
     for (const post of introPosts) {
       const intro = intros.get(post.rootMessageId);
@@ -363,9 +394,12 @@ async function run(args: Args): Promise<{ failures: FailureContext[] }> {
     // Работы из общей ветки. Тот же фильтр длины: реплика в три слова не
     // может быть анонсом работы.
     const workPosts = groupConsecutive(byKind.get('work') ?? []).filter((p) => isLongPost(p));
-    const { results: extracted, failedBatches: workFailures } = await extractWorks(workPosts, {
-      onBatch: progress(`работы ${chat.title}`),
-    });
+    const { results: extracted, failedBatches: workFailures } = await extractBy(
+      workPosts,
+      workFrom,
+      () => extractWorks(workPosts, { onBatch: progress(`работы ${chat.title}`) }),
+      args.useLlm,
+    );
     for (const f of workFailures) failures.push({ ...f, chatId: chat.chatId, kind: 'work' });
     for (const post of workPosts) {
       const fields = extracted.get(post.rootMessageId);
@@ -417,9 +451,12 @@ async function run(args: Args): Promise<{ failures: FailureContext[] }> {
         ownerId !== null ? m.authorId === ownerId : m.authorName === studentName,
       );
       const ownPosts = groupConsecutive(own).filter((p) => isLongPost(p));
-      const { results: ownWorks, failedBatches: ownFailures } = await extractWorks(ownPosts, {
-        onBatch: progress(`VIP ${studentName}`),
-      });
+      const { results: ownWorks, failedBatches: ownFailures } = await extractBy(
+        ownPosts,
+        workFrom,
+        () => extractWorks(ownPosts, { onBatch: progress(`VIP ${studentName}`) }),
+        args.useLlm,
+      );
       for (const f of ownFailures) failures.push({ ...f, chatId: chat.chatId, kind: 'work' });
       for (const post of ownPosts) {
         const fields = ownWorks.get(post.rootMessageId);
@@ -456,8 +493,54 @@ async function run(args: Args): Promise<{ failures: FailureContext[] }> {
 
   const db = getServiceClient();
   await writeAll(db, students, dedupedWorks, rawRows);
+  await fillContacts(db, chats);
   printFailureSummary(failures);
   return { failures };
+}
+
+/**
+ * Дописывает контакт и настоящее имя тем, у кого их нет.
+ *
+ * Профиль, заведённый под работу, знает только нормализованный ключ: человек
+ * показал сайт, но не представлялся. @username при этом есть в дампе —
+ * и ради контактов витрина и делается.
+ */
+export async function fillContacts(db: SupabaseClient, chats: ChatDump[]): Promise<void> {
+  const byKey = new Map<string, { name: string; username: string }>();
+  for (const chat of chats) {
+    for (const [name, username] of usernameByAuthorName(chat)) {
+      byKey.set(normalizeAuthorKey(name), { name, username });
+    }
+  }
+
+  const { data, error } = await db
+    .from(tbl('students'))
+    .select('id, import_key, display_name, telegram_username')
+    .is('telegram_username', null);
+  if (error) throw error;
+
+  let filled = 0;
+  for (const row of (data ?? []) as {
+    id: string;
+    import_key: string | null;
+    display_name: string;
+  }[]) {
+    if (!row.import_key) continue;
+    // У тёзок ключ разведён по user id — «alex#645654465».
+    const contact = byKey.get(row.import_key.split('#')[0]!);
+    if (!contact) continue;
+    const { error: updateError } = await db
+      .from(tbl('students'))
+      .update({
+        telegram_username: contact.username,
+        // display_name у таких профилей — это ключ в нижнем регистре.
+        ...(row.display_name === row.import_key ? { display_name: contact.name } : {}),
+      })
+      .eq('id', row.id);
+    if (updateError) throw updateError;
+    filled++;
+  }
+  console.log(`[upsert] контакты дописаны: ${filled}`);
 }
 
 /**
