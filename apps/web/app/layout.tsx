@@ -4,12 +4,20 @@ import Link from 'next/link';
 import { getCurrentStudent } from '@/lib/auth';
 
 export const metadata: Metadata = {
-  title: 'Ученики — курс по вайб-кодингу',
-  description: 'Работы учеников курса по вайб-кодингу: сайты, сервисы, боты.',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://vibecoding-students.vercel.app'),
+  title: 'Сделано учениками — курс по вайб-кодингу',
+  description: 'Живая витрина сайтов, сервисов и ботов, запущенных учениками курса по вайб-кодингу.',
   openGraph: {
-    title: 'Ученики — курс по вайб-кодингу',
-    description: 'Работы учеников курса по вайб-кодингу.',
+    title: 'Сделано учениками — курс по вайб-кодингу',
+    description: 'Живая витрина сайтов, сервисов и ботов, запущенных учениками курса.',
     type: 'website',
+    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'Сделано учениками. Уже работает.' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Сделано учениками — курс по вайб-кодингу',
+    description: 'Живая витрина сайтов, сервисов и ботов, запущенных учениками курса.',
+    images: ['/og.png'],
   },
 };
 
@@ -21,31 +29,37 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="ru">
       <head>
         <link
-          href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300..700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&family=Unbounded:wght@500;600;700&display=swap"
           rel="stylesheet"
         />
       </head>
       <body className="min-h-screen bg-bg text-ink">
-        <header className="bg-surface border-b border-line h-[58px] px-6 sm:px-10 flex items-center justify-between sticky top-0 z-30">
-          <Link
-            href="/"
-            aria-label="На главную — ученики курса по вайб-кодингу"
-            className="flex items-center gap-2 font-bold text-[13px] tracking-[.5px] -my-2 py-2 pr-2 select-none touch-manipulation"
-          >
-            <span className="w-7 h-7 bg-accent rounded-sm shrink-0" />
-            <span className="whitespace-nowrap font-mono">ВАЙБ-КОДИНГ</span>
-          </Link>
-          <div className="flex items-center gap-3 text-[13px] text-text2">
+        <a href="#content" className="skip-link">К содержанию</a>
+        <header className="bg-ink text-white border-b border-white/10 h-[70px] px-5 sm:px-10 flex items-center sticky top-0 z-30">
+          <div className="w-full max-w-[1320px] mx-auto flex items-center justify-between gap-6">
+            <Link
+              href="/"
+              aria-label="На главную — ученики курса по вайб-кодингу"
+              className="flex items-center gap-3 font-bold select-none touch-manipulation group"
+            >
+              <span className="w-8 h-8 bg-accent rounded-sm shrink-0 grid place-items-center text-ink font-display text-[11px] group-hover:rotate-6">V</span>
+              <span className="whitespace-nowrap font-display text-[11px] sm:text-[12px] tracking-[-.02em]">ВАЙБ-КОДИНГ</span>
+            </Link>
+            <nav aria-label="Основная навигация" className="hidden md:flex items-center gap-8 ml-auto mr-4 font-mono text-[11px] uppercase tracking-[.08em] text-white/60">
+              <a href="/#works" className="hover:text-white">Работы</a>
+              <a href="/#people" className="hover:text-white">Участники</a>
+            </nav>
+            <div className="flex items-center gap-3 text-[13px] text-white/70">
             {me ? (
               <>
-                <Link href="/profile" className="flex items-center gap-2 hover:text-ink">
-                  <span className="w-[30px] h-[30px] rounded-full bg-accent text-white font-semibold text-xs flex items-center justify-center">
+                <Link href="/profile" className="flex items-center gap-2 hover:text-white">
+                  <span className="w-[32px] h-[32px] rounded-sm bg-accent text-ink font-semibold text-xs flex items-center justify-center">
                     {initial}
                   </span>
                   <span className="hidden sm:inline">{me.display_name}</span>
                 </Link>
                 <form action="/api/auth/logout" method="POST">
-                  <button className="text-[11px] text-text3 underline underline-offset-2 hover:text-accent">
+                  <button className="text-[11px] text-white/50 underline underline-offset-2 hover:text-white">
                     выйти
                   </button>
                 </form>
@@ -53,14 +67,25 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             ) : (
               <Link
                 href="/login"
-                className="px-3 py-1.5 rounded-full border border-line hover:border-accent hover:text-accent text-[12px]"
+                className="px-3 sm:px-4 py-2 rounded-sm border border-white/20 hover:border-accent hover:bg-accent hover:text-ink text-[11px] sm:text-[12px] font-semibold"
               >
-                Войти через Telegram
+                <span className="hidden sm:inline">Войти через Telegram</span>
+                <span className="sm:hidden">Войти</span>
               </Link>
             )}
+            </div>
           </div>
         </header>
-        <main>{children}</main>
+        <main id="content">{children}</main>
+        <footer className="bg-ink text-white border-t border-white/10 px-5 sm:px-10 py-10">
+          <div className="max-w-[1320px] mx-auto flex flex-col sm:flex-row sm:items-end justify-between gap-8">
+            <div>
+              <div className="font-display text-[12px] tracking-[-.02em]">ВАЙБ-КОДИНГ</div>
+              <p className="mt-3 text-[13px] text-white/50 max-w-sm">Живая витрина людей, которые учатся через практику и публикуют результат.</p>
+            </div>
+            <div className="font-mono text-[10px] uppercase tracking-[.1em] text-white/40">Сделано учениками · обновляется по мере запусков</div>
+          </div>
+        </footer>
       </body>
     </html>
   );

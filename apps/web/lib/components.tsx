@@ -9,7 +9,7 @@ export function Avatar({ name, url, size = 56 }: { name: string; url: string | n
         alt={name}
         width={size}
         height={size}
-        className="rounded-sm border border-line object-cover"
+        className="rounded-[24px] border border-line object-cover"
         style={{ width: size, height: size }}
       />
     );
@@ -22,7 +22,7 @@ export function Avatar({ name, url, size = 56 }: { name: string; url: string | n
     .join('');
   return (
     <div
-      className="rounded-sm border border-line bg-line/50 flex items-center justify-center font-bold text-ink"
+      className="rounded-[24px] border border-line bg-accent-light flex items-center justify-center font-display font-bold text-accent-dark"
       style={{ width: size, height: size, fontSize: size * 0.36 }}
     >
       {initials || '?'}
@@ -38,7 +38,7 @@ export function StatusPill({ status }: { status: NonNullable<StudentRow['status'
         ? 'ищу партнёров'
         : 'учусь';
   return (
-    <span className="text-xs uppercase tracking-wider px-2 py-1 border border-accent text-accent">
+    <span className="inline-flex rounded-sm bg-accent-light text-accent-dark font-mono text-[9px] uppercase tracking-[.08em] px-2.5 py-1.5">
       {label}
     </span>
   );

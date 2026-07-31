@@ -31,7 +31,7 @@ export function WorkThumb({ work }: { work: WorkRow }) {
       <img
         src={src}
         alt={work.title}
-        className="w-full aspect-[16/10] object-cover object-top border-b border-line"
+        className="w-full aspect-[16/10] object-cover object-top transition-transform duration-500 group-hover:scale-[1.02]"
       />
     );
   }
@@ -43,32 +43,32 @@ export function WorkThumb({ work }: { work: WorkRow }) {
       : 'без ссылки';
 
   return (
-    <div className="w-full aspect-[16/10] border-b border-line bg-accent-light flex items-center justify-center px-4">
-      <span className="font-mono text-[13px] text-accent text-center break-all">{caption}</span>
+    <div className="w-full aspect-[16/10] bg-accent flex items-end p-5">
+      <span className="font-display text-[13px] text-ink text-left break-all">{caption}</span>
     </div>
   );
 }
 
 export function WorkCard({ work, authorName }: { work: WorkRow; authorName?: string }) {
   return (
-    <article className="bg-surface border border-line rounded overflow-hidden flex flex-col">
-      <Link href={`/w/${work.id}`} className="block">
+    <article className="group bg-surface border border-line rounded-lg overflow-hidden flex flex-col hover:border-ink hover:-translate-y-1 transition-transform">
+      <Link href={`/w/${work.id}`} className="block overflow-hidden">
         <WorkThumb work={work} />
       </Link>
-      <div className="p-4 flex flex-col gap-2 flex-1">
-        <Link href={`/w/${work.id}`} className="font-mono text-[14px] text-ink hover:text-accent">
+      <div className="p-5 flex flex-col gap-2 flex-1 border-t border-line">
+        <Link href={`/w/${work.id}`} className="font-display text-[13px] leading-snug tracking-[-.02em] text-ink hover:text-accent">
           {work.title}
         </Link>
-        {authorName ? <div className="text-[13px] text-text2">{authorName}</div> : null}
+        {authorName ? <div className="font-mono text-[9px] uppercase tracking-[.06em] text-text3">{authorName}</div> : null}
         {work.description ? (
-          <p className="text-[13px] text-text2 line-clamp-3">{work.description}</p>
+          <p className="text-[12px] leading-relaxed text-text2 line-clamp-3">{work.description}</p>
         ) : null}
         {work.stack.length ? (
           <div className="mt-auto pt-2 flex flex-wrap gap-1.5">
             {work.stack.slice(0, 4).map((s) => (
               <span
                 key={s}
-                className="font-mono text-[11px] px-2 py-0.5 bg-tag-bg text-tag-text rounded-sm"
+                className="font-mono text-[9px] px-2 py-1 bg-tag-bg text-tag-text rounded-sm"
               >
                 {s}
               </span>

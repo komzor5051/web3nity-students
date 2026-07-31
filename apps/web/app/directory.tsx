@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { REGION_OPTS } from '@/lib/region';
 
@@ -116,6 +116,24 @@ export default function Directory({
   const [onlyWithWorks, setOnlyWithWorks] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [recsOpen, setRecsOpen] = useState(false);
+  const [showAllWorks, setShowAllWorks] = useState(false);
+
+  useEffect(() => {
+    if (!openId && !recsOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpenId(null);
+        setRecsOpen(false);
+      }
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [openId, recsOpen]);
 
   const spheres = useMemo(() => {
     // Только короткие и реально общие категории — длинные описательные «сферы»
@@ -212,167 +230,151 @@ export default function Directory({
   const showStatusFilter = statusCounts.all > statusCounts.none;
 
   const opened = openId ? items.find((i) => i.id === openId) ?? null : null;
+  const visibleWorks = showAllWorks ? works : works.slice(0, 6);
+  const hasFilters = status !== 'all' || sphere !== 'all' || region !== 'Все' || q || onlyWithWorks;
 
   return (
-    <div className="max-w-[1180px] mx-auto px-6 sm:px-10 py-10 sm:py-14 overflow-x-clip">
-      <section className="max-w-[720px]">
-        <h1 className="font-mono text-[30px] sm:text-[38px] leading-[1.15] tracking-tight">
-          Работы учеников
-          <br />
-          курса по вайб-кодингу
-        </h1>
-        <p className="text-text2 text-[15px] leading-relaxed mt-4">
-          Сайты и сервисы, собранные участниками курса. Смотрите работы, открывайте профили,
-          пишите авторам напрямую в Telegram.
-        </p>
-        <dl className="flex flex-wrap gap-x-10 gap-y-3 mt-7 border-t border-line pt-5">
-          <Metric value={stats.works} label={plural(stats.works, 'работа', 'работы', 'работ')} />
-          <Metric
-            value={stats.total}
-            label={plural(stats.total, 'участник', 'участника', 'участников')}
-          />
-          <Metric value={stats.countries} label={plural(stats.countries, 'страна', 'страны', 'стран')} />
-        </dl>
+    <>
+      <section className="relative overflow-hidden bg-ink text-white vibe-grid vibe-grain">
+        <div className="absolute -right-16 top-14 h-64 w-64 rotate-12 border-[44px] border-accent/90 rounded-[36px] opacity-80" aria-hidden="true" />
+        <div className="relative max-w-[1320px] mx-auto px-5 sm:px-10 py-16 sm:py-24 lg:py-28">
+          <div className="grid lg:grid-cols-[minmax(0,1fr)_360px] gap-14 lg:gap-20 items-end">
+            <div>
+              <p className="font-mono text-[10px] sm:text-[11px] uppercase tracking-[.14em] text-accent mb-6">От идеи до первой ссылки</p>
+              <h1 className="font-display max-w-[880px] text-[36px] sm:text-[56px] lg:text-[72px] leading-[.98] tracking-[-.055em] text-balance">
+                Сделано учениками. Уже работает.
+              </h1>
+              <p className="max-w-[650px] text-white/60 text-[15px] sm:text-[17px] leading-relaxed mt-7 text-pretty">
+                Живая витрина проектов курса по вайб-кодингу. Открывайте сайты, находите людей из своей сферы и пишите авторам напрямую.
+              </p>
+              <div className="flex flex-wrap gap-3 mt-8">
+                <a href="#works" className="inline-flex items-center gap-3 rounded-sm bg-accent text-ink px-5 py-3 text-[13px] font-extrabold hover:bg-white">
+                  Смотреть проекты <span aria-hidden="true">↓</span>
+                </a>
+                {recommendations.length > 0 && (
+                  <button type="button" onClick={() => setRecsOpen(true)} className="rounded-sm border border-white/20 px-5 py-3 text-[13px] font-semibold hover:border-white hover:bg-white/5">
+                    Мои рекомендации · {recommendations.length}
+                  </button>
+                )}
+              </div>
+            </div>
+            <dl className="grid grid-cols-3 lg:grid-cols-1 border-t lg:border-t-0 lg:border-l border-white/20 lg:pl-8 pt-7 lg:pt-0 gap-5 lg:gap-7">
+              <Metric value={stats.works} label={plural(stats.works, 'работа', 'работы', 'работ')} />
+              <Metric value={stats.total} label={plural(stats.total, 'участник', 'участника', 'участников')} />
+              <Metric value={stats.countries} label={plural(stats.countries, 'страна', 'страны', 'стран')} />
+            </dl>
+          </div>
+        </div>
       </section>
 
-      {recommendations.length > 0 && (
-        <div className="mt-8">
-          <button
-            type="button"
-            onClick={() => setRecsOpen(true)}
-            className="px-4 py-2.5 rounded-sm bg-accent text-white text-[13px] font-semibold hover:bg-accent-dark active:bg-accent-dark transition-colors touch-manipulation"
-          >
-            Ваши рекомендации · {recommendations.length}
-          </button>
-        </div>
-      )}
-
-      {works.length > 0 && (
-        <section className="mt-14">
-          <SectionHead title="Работы" note={`${works.length}`} />
-          <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-8">
-            {works.map((w, idx) => (
-              <li key={w.id}>
-                <WorkTile work={w} index={idx} />
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <section className="mt-16">
-        <SectionHead title="Участники" note={`${filtered.length}`} />
-
-        <div className="relative mb-4">
-          <SearchIcon />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Поиск по имени, сфере, городу"
-            className="w-full pl-10 pr-4 py-3 text-[14px] bg-surface border border-line rounded-sm focus:border-accent outline-none"
-          />
-        </div>
-
-        <div className="flex flex-col gap-3 mb-7">
-          {showStatusFilter && (
-            <FilterGroup label="Статус">
-              {STATUS_OPTS.filter((o) => o.key === 'all' || statusCounts[o.key] > 0).map((o) => (
-                <Chip key={o.key} active={status === o.key} onClick={() => setStatus(o.key)}>
-                  {o.label}
-                  <span className="ml-1.5 opacity-45">{statusCounts[o.key]}</span>
-                </Chip>
+      <div className="max-w-[1320px] mx-auto px-5 sm:px-10 py-16 sm:py-24 overflow-x-clip">
+        {works.length > 0 && (
+          <section id="works" className="scroll-mt-28">
+            <SectionHead title="Проекты, которые уже можно открыть" note={`${works.length} запусков`} />
+            <ul className="work-showcase-grid">
+              {visibleWorks.map((w, idx) => (
+                <li key={w.id}>
+                  <WorkTile work={w} index={idx} />
+                </li>
               ))}
-            </FilterGroup>
-          )}
-
-          {spheres.length > 1 && (
-            <FilterGroup label="Сфера">
-              {spheres.map((s) => (
-                <Chip key={s} active={sphere === s} onClick={() => setSphere(s)}>
-                  {s === 'all' ? 'Все' : s}
-                  <span className="ml-1.5 opacity-45">{sphereCounts.get(s) ?? 0}</span>
-                </Chip>
-              ))}
-            </FilterGroup>
-          )}
-
-          <FilterGroup label="Регион">
-            {REGION_OPTS.filter((r) => r === 'Все' || (regionCounts.get(r) ?? 0) > 0).map((r) => (
-              <Chip key={r} active={region === r} onClick={() => setRegion(r)}>
-                {r}
-                <span className="ml-1.5 opacity-45">{regionCounts.get(r) ?? 0}</span>
-              </Chip>
-            ))}
-          </FilterGroup>
-
-          <label className="flex items-center gap-2 text-[13px] text-text2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={onlyWithWorks}
-              onChange={(e) => setOnlyWithWorks(e.target.checked)}
-              className="accent-accent"
-            />
-            Только с работами
-          </label>
-        </div>
-
-        {filtered.length === 0 ? (
-          <div className="border border-line rounded-sm py-16 text-center">
-            <h3 className="font-mono text-[15px] text-ink mb-1">Никого не нашли</h3>
-            <p className="text-[13px] text-text2">Попробуйте изменить фильтры</p>
-          </div>
-        ) : (
-          <>
-            {rich.length > 0 && (
-              <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {rich.map((s, idx) => (
-                  <li key={s.id}>
-                    <Card
-                      item={s}
-                      index={idx}
-                      isMe={!!myId && s.id === myId}
-                      onOpen={() => setOpenId(s.id)}
-                    />
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {plain.length > 0 && (
-              <div className={rich.length > 0 ? 'mt-10' : ''}>
-                <h3 className="font-mono text-[12px] uppercase tracking-[.08em] text-text3 mb-3">
-                  Ещё {plain.length} {plural(plain.length, 'участник', 'участника', 'участников')} —
-                  профиль пока не заполнен
-                </h3>
-                <ul className="border-t border-line">
-                  {plain.map((s) => (
-                    <PlainRow
-                      key={s.id}
-                      item={s}
-                      isMe={!!myId && s.id === myId}
-                      onOpen={() => setOpenId(s.id)}
-                    />
-                  ))}
-                </ul>
+            </ul>
+            {works.length > 6 && (
+              <div className="mt-10 flex items-center gap-5">
+                <button type="button" onClick={() => setShowAllWorks((value) => !value)} className="rounded-sm border border-ink px-5 py-3 text-[12px] font-bold hover:bg-ink hover:text-white">
+                  {showAllWorks ? 'Показать главное' : `Показать все ${works.length}`}
+                </button>
+                <span className="hidden sm:block h-px flex-1 bg-line" />
               </div>
             )}
-          </>
+          </section>
         )}
-      </section>
+
+        <section id="people" className="mt-24 sm:mt-32 scroll-mt-28">
+          <SectionHead title="Кто за этим стоит" note={`${filtered.length} из ${items.length}`} />
+          <div className="grid lg:grid-cols-[290px_minmax(0,1fr)] gap-10 lg:gap-12 items-start">
+            <aside className="lg:sticky lg:top-[94px] rounded-lg bg-surface p-5 sm:p-6 border border-line">
+              <div className="flex items-baseline justify-between mb-5">
+                <h3 className="font-display text-[13px]">Найти человека</h3>
+                {hasFilters && (
+                  <button type="button" onClick={() => { setStatus('all'); setSphere('all'); setRegion('Все'); setQ(''); setOnlyWithWorks(false); }} className="font-mono text-[10px] text-text3 hover:text-accent">сбросить</button>
+                )}
+              </div>
+              <div className="relative mb-6">
+                <SearchIcon />
+                <label htmlFor="directory-search" className="sr-only">Поиск по участникам</label>
+                <input id="directory-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Имя, сфера, город" className="w-full pl-10 pr-3 py-3 text-[13px] bg-bg border border-line rounded-sm focus:border-accent outline-none" />
+              </div>
+              <div className="flex flex-col gap-5">
+                {showStatusFilter && (
+                  <FilterGroup label="Статус">
+                    {STATUS_OPTS.filter((o) => o.key === 'all' || statusCounts[o.key] > 0).map((o) => (
+                      <Chip key={o.key} active={status === o.key} onClick={() => setStatus(o.key)}>{o.label}<span className="ml-1.5 opacity-45">{statusCounts[o.key]}</span></Chip>
+                    ))}
+                  </FilterGroup>
+                )}
+                {spheres.length > 1 && (
+                  <FilterGroup label="Сфера">
+                    {spheres.map((s) => (
+                      <Chip key={s} active={sphere === s} onClick={() => setSphere(s)}>{s === 'all' ? 'Все' : s}<span className="ml-1.5 opacity-45">{sphereCounts.get(s) ?? 0}</span></Chip>
+                    ))}
+                  </FilterGroup>
+                )}
+                <FilterGroup label="Регион">
+                  {REGION_OPTS.filter((r) => r === 'Все' || (regionCounts.get(r) ?? 0) > 0).map((r) => (
+                    <Chip key={r} active={region === r} onClick={() => setRegion(r)}>{r}<span className="ml-1.5 opacity-45">{regionCounts.get(r) ?? 0}</span></Chip>
+                  ))}
+                </FilterGroup>
+                <label className="flex items-center gap-3 text-[12px] font-semibold cursor-pointer select-none border-t border-line pt-5">
+                  <input type="checkbox" checked={onlyWithWorks} onChange={(e) => setOnlyWithWorks(e.target.checked)} className="accent-accent w-4 h-4" />
+                  Только с работами
+                </label>
+              </div>
+            </aside>
+
+            <div>
+              {filtered.length === 0 ? (
+                <div className="border border-line rounded-lg bg-surface py-20 px-6 text-center">
+                  <div className="font-display text-[32px] text-accent mb-3" aria-hidden="true">0</div>
+                  <h3 className="font-display text-[14px] text-ink mb-2">Совпадений нет</h3>
+                  <p className="text-[13px] text-text2">Сбросьте один из фильтров или попробуйте другой запрос.</p>
+                </div>
+              ) : (
+                <>
+                  {rich.length > 0 && (
+                    <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {rich.map((s, idx) => (
+                        <li key={s.id}>
+                          <Card item={s} index={idx} isMe={!!myId && s.id === myId} onOpen={() => setOpenId(s.id)} />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {plain.length > 0 && (
+                    <div className={rich.length > 0 ? 'mt-12' : ''}>
+                      <h3 className="font-mono text-[10px] uppercase tracking-[.1em] text-text3 mb-3">Ещё {plain.length} {plural(plain.length, 'участник', 'участника', 'участников')} заполняют профиль</h3>
+                      <ul className="border-t border-line">
+                        {plain.map((s) => <PlainRow key={s.id} item={s} isMe={!!myId && s.id === myId} onOpen={() => setOpenId(s.id)} />)}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </section>
+      </div>
 
       {opened && <Modal item={opened} onClose={() => setOpenId(null)} />}
-      {recsOpen && (
-        <RecsModal recommendations={recommendations} onClose={() => setRecsOpen(false)} />
-      )}
-    </div>
+      {recsOpen && <RecsModal recommendations={recommendations} onClose={() => setRecsOpen(false)} />}
+    </>
   );
 }
 
 function SectionHead({ title, note }: { title: string; note: string }) {
   return (
-    <div className="flex items-baseline justify-between border-b border-line pb-3 mb-6">
-      <h2 className="font-mono text-[20px] tracking-tight">{title}</h2>
-      <span className="font-mono text-[12px] text-text3">{note}</span>
+    <div className="grid sm:grid-cols-[minmax(0,1fr)_auto] gap-3 items-end border-b border-ink pb-5 mb-8">
+      <h2 className="font-display text-[24px] sm:text-[34px] leading-[1.08] tracking-[-.04em] max-w-[760px] text-balance">{title}</h2>
+      <span className="font-mono text-[10px] uppercase tracking-[.1em] text-text3">{note}</span>
     </div>
   );
 }
@@ -381,8 +383,8 @@ function Metric({ value, label }: { value: number; label: string }) {
   return (
     <div>
       <dt className="sr-only">{label}</dt>
-      <dd className="font-mono text-[26px] leading-none">{value}</dd>
-      <div className="text-[12px] text-text3 mt-1.5">{label}</div>
+      <dd className="font-display text-[28px] sm:text-[34px] leading-none tabular-nums">{value}</dd>
+      <div className="font-mono text-[9px] sm:text-[10px] uppercase tracking-[.08em] text-white/40 mt-2">{label}</div>
     </div>
   );
 }
@@ -391,34 +393,36 @@ function WorkTile({ work, index }: { work: GalleryWork; index: number }) {
   const url = work.liveUrl ?? work.repoUrl;
   return (
     <article
-      className="vibe-card-anim group flex flex-col"
+      className="vibe-card-anim group flex h-full flex-col"
       style={{ animationDelay: `${Math.min(index, 12) * 0.03}s` }}
     >
       <Link
         href={`/w/${work.id}`}
-        className="block border border-line bg-surface overflow-hidden rounded-sm group-hover:border-accent transition-colors"
+        className="relative block border border-line bg-surface overflow-hidden rounded group-hover:border-ink"
       >
+        <span className="absolute top-3 left-3 z-10 rounded-sm bg-ink/90 text-white px-2 py-1 font-mono text-[9px] tracking-[.08em]">#{String(index + 1).padStart(2, '0')}</span>
         {work.screenshotUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={work.screenshotUrl}
             alt={work.title}
             loading="lazy"
-            className="w-full aspect-[16/10] object-cover object-top"
+            className="work-visual w-full aspect-[16/10] object-cover object-top transition-transform duration-500 ease-out group-hover:scale-[1.02]"
           />
         ) : (
-          <div className="w-full aspect-[16/10] bg-accent-light flex items-center justify-center px-4">
-            <span className="font-mono text-[12px] text-accent text-center break-all">
+          <div className="work-visual w-full aspect-[16/10] bg-accent flex items-end justify-start p-5">
+            <span className="font-display text-[14px] text-ink text-left break-all max-w-[80%]">
               {url ? hostLabel(url) : 'без ссылки'}
             </span>
           </div>
         )}
       </Link>
-      <div className="pt-3">
-        <Link href={`/w/${work.id}`} className="text-[14px] font-semibold leading-snug hover:text-accent">
+      <div className="pt-4 flex flex-col flex-1">
+        <Link href={`/w/${work.id}`} className="font-display text-[14px] sm:text-[15px] leading-snug tracking-[-.025em] hover:text-accent text-balance">
           {work.title}
         </Link>
-        <div className="mt-1 flex items-baseline gap-1.5 text-[12px] text-text2 min-w-0">
+        {work.description && <p className="mt-2 text-[12px] leading-relaxed text-text2 line-clamp-2 text-pretty">{work.description}</p>}
+        <div className="mt-auto pt-3 flex items-baseline gap-1.5 text-[11px] text-text2 min-w-0">
           <Link href={`/s/${work.authorSlug}`} className="hover:text-accent shrink-0 truncate max-w-[45%]">
             {work.authorName}
           </Link>
@@ -430,9 +434,9 @@ function WorkTile({ work, index }: { work: GalleryWork; index: number }) {
                 target="_blank"
                 rel="noopener noreferrer"
                 title={hostLabel(url)}
-                className="font-mono text-text3 hover:text-accent truncate"
+                className="font-mono text-text3 hover:text-accent truncate text-[10px]"
               >
-                {hostLabel(url)}
+                {hostLabel(url)} ↗
               </a>
             </>
           )}
@@ -454,19 +458,21 @@ function RecsModal({
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 bg-ink/40 backdrop-blur-[4px] z-40 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-ink/70 backdrop-blur-[7px] z-40 flex items-center justify-center p-4"
+      role="presentation"
     >
-      <div className="bg-surface border border-line rounded-sm w-[560px] max-w-full max-h-[85vh] overflow-y-auto relative">
+      <div role="dialog" aria-modal="true" aria-labelledby="recommendations-title" className="bg-surface border border-line rounded-lg w-[600px] max-w-full max-h-[85vh] overflow-y-auto relative">
         <CloseButton onClose={onClose} />
-        <div className="px-6 pt-6 pb-2">
-          <h2 className="font-mono text-[20px] mb-0.5">Ваши рекомендации</h2>
+        <div className="px-6 sm:px-8 pt-8 pb-2 pr-14">
+          <p className="font-mono text-[9px] uppercase tracking-[.12em] text-accent mb-3">Для вас</p>
+          <h2 id="recommendations-title" className="font-display text-[22px] leading-tight mb-2">Ваши рекомендации</h2>
           <p className="text-[13px] text-text2">
             Участники курса, с которыми вам стоит познакомиться.
           </p>
         </div>
-        <ul className="px-6 py-4 space-y-3">
+        <ul className="px-6 sm:px-8 py-5 pb-8 space-y-3">
           {recommendations.map(({ item, reason }) => (
-            <li key={item.id} className="border border-line rounded-sm p-4">
+            <li key={item.id} className="border-t border-line pt-4 first:border-t-0 first:pt-0">
               <div className="flex items-start gap-3">
                 <Avatar item={item} size={44} />
                 <div className="min-w-0 flex-1">
@@ -485,7 +491,7 @@ function RecsModal({
                         href={`https://t.me/${item.telegram}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[12px] px-3 py-1.5 rounded-sm bg-accent text-white hover:bg-accent-dark"
+                        className="text-[12px] px-3 py-2 rounded-sm bg-accent text-ink font-bold hover:bg-accent-dark hover:text-white"
                       >
                         Написать
                       </a>
@@ -509,11 +515,11 @@ function RecsModal({
 
 function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-2">
-      <span className="text-[11px] text-text3 uppercase tracking-[.5px] font-medium shrink-0 pt-1.5 w-[52px]">
+    <div>
+      <span className="block font-mono text-[9px] text-text3 uppercase tracking-[.1em] font-medium mb-2.5">
         {label}
       </span>
-      <div className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0">
+      <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto pb-1 hide-scrollbar lg:flex-wrap lg:overflow-visible lg:pb-0">
         {children}
       </div>
     </div>
@@ -533,10 +539,11 @@ function Chip({
     <button
       type="button"
       onClick={onClick}
-      className={`px-3 py-1.5 rounded-sm text-[12px] border transition-colors whitespace-nowrap touch-manipulation ${
+      aria-pressed={active}
+      className={`px-2.5 py-1.5 rounded-sm text-[11px] border whitespace-nowrap touch-manipulation ${
         active
           ? 'bg-ink text-white border-ink'
-          : 'bg-surface text-text2 border-line hover:border-text3'
+          : 'bg-transparent text-text2 border-line hover:border-ink hover:text-ink'
       }`}
     >
       {children}
@@ -546,18 +553,7 @@ function Chip({
 
 function SearchIcon() {
   return (
-    <svg
-      className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text3"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <circle cx="11" cy="11" r="8" />
-      <path d="m21 21-4.3-4.3" />
-    </svg>
+    <span aria-hidden="true" className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text3 font-mono text-[17px]">⌕</span>
   );
 }
 
@@ -575,64 +571,53 @@ function Card({
   const place = [item.city, item.country].filter(Boolean).join(', ');
   const status = statusText(item.status);
   return (
-    <button
-      onClick={onOpen}
-      className={`vibe-card-anim text-left w-full h-full bg-surface border rounded-sm p-5 flex flex-col hover:border-accent transition-colors ${
-        isMe ? 'border-accent' : 'border-line'
-      }`}
+    <article
+      className={`vibe-card-anim text-left w-full h-full bg-surface border rounded-lg overflow-hidden flex flex-col hover:-translate-y-1 hover:border-ink ${isMe ? 'border-accent' : 'border-line'}`}
       style={{ animationDelay: `${Math.min(index, 12) * 0.03}s` }}
     >
-      <div className="flex gap-3 items-center">
-        <Avatar item={item} size={40} />
-        <div className="min-w-0 flex-1">
-          <div className="font-semibold text-[14px] truncate flex items-center gap-1.5">
-            {item.name}
-            {isMe && (
-              <span className="shrink-0 text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-accent text-white">
-                это вы
-              </span>
-            )}
-          </div>
-          <div className="text-[12px] text-text3 truncate">
-            {[item.sphere, place].filter(Boolean).join(' · ') ||
-              (item.telegram ? `@${item.telegram}` : '')}
+      <div className="h-1.5 bg-accent" />
+      <div className="p-5 sm:p-6 flex-1">
+        <div className="flex gap-4 items-center">
+          <Avatar item={item} size={52} />
+          <div className="min-w-0 flex-1">
+            <div className="font-display text-[13px] leading-snug truncate flex items-center gap-1.5">
+              {item.name}
+              {isMe && <span className="shrink-0 font-mono text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-accent text-ink">это вы</span>}
+            </div>
+            <div className="text-[11px] text-text3 truncate mt-1">
+              {[item.sphere, place].filter(Boolean).join(' · ') || (item.telegram ? `@${item.telegram}` : '')}
+            </div>
           </div>
         </div>
+        {item.bio && <p className="text-[12px] text-text2 leading-[1.65] mt-5 line-clamp-4 text-pretty">{item.bio}</p>}
+        <div className="font-mono text-[10px] uppercase tracking-[.06em] text-text3 mt-5">
+          {item.workCount > 0 ? `${item.workCount} ${plural(item.workCount, 'работа', 'работы', 'работ')}` : status ?? 'участник курса'}
+        </div>
       </div>
-
-      {item.bio && (
-        <p className="text-[13px] text-text2 leading-[1.55] mt-3.5 line-clamp-3">{item.bio}</p>
-      )}
-
-      <div className="mt-auto pt-4 flex justify-between items-center gap-3">
-        <span className="font-mono text-[12px] text-text3">
-          {item.workCount > 0
-            ? `${item.workCount} ${plural(item.workCount, 'работа', 'работы', 'работ')}`
-            : status ?? ''}
-        </span>
+      <div className="grid grid-cols-2 border-t border-line mt-auto">
+        <button type="button" onClick={onOpen} className="px-4 py-3.5 text-[11px] font-bold text-left hover:bg-ink hover:text-white">Открыть профиль →</button>
         {item.telegram ? (
           <a
-            onClick={(e) => e.stopPropagation()}
             href={`https://t.me/${item.telegram}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="px-3 py-1.5 rounded-sm border border-line text-[12px] text-text2 hover:bg-accent hover:text-white hover:border-accent transition-colors"
+            className="px-4 py-3.5 text-[11px] text-text2 text-right border-l border-line hover:bg-accent hover:text-ink font-semibold"
           >
-            Написать
+            Telegram ↗
           </a>
-        ) : null}
+        ) : <span className="px-4 py-3.5 text-[11px] text-text3 text-right border-l border-line">без контакта</span>}
       </div>
-    </button>
+    </article>
   );
 }
 
 /** Строка для профиля, у которого пока нет ни работ, ни рассказа о себе. */
 function PlainRow({ item, isMe, onOpen }: { item: DirItem; isMe: boolean; onOpen: () => void }) {
   return (
-    <li className="border-b border-line">
-      <div className="flex items-center gap-3 py-2.5">
-        <button onClick={onOpen} className="flex items-center gap-3 min-w-0 flex-1 text-left">
-          <Avatar item={item} size={28} />
+    <li className="border-b border-line hover:bg-surface/50">
+      <div className="flex items-center gap-3 py-3 px-1">
+        <button onClick={onOpen} className="flex items-center gap-3 min-w-0 flex-1 text-left group">
+          <Avatar item={item} size={32} />
           <span className="text-[13px] truncate">
             {item.name}
             {isMe && <span className="ml-2 text-[11px] text-accent">это вы</span>}
@@ -667,14 +652,14 @@ function Avatar({ item, size }: { item: DirItem; size: number }) {
         alt={item.name}
         width={size}
         height={size}
-        className="object-cover flex-shrink-0 rounded-sm"
+          className="object-cover flex-shrink-0 rounded-[14px]"
         style={{ width: size, height: size }}
       />
     );
   }
   return (
     <div
-      className="flex items-center justify-center bg-accent-light text-accent font-mono font-semibold flex-shrink-0 rounded-sm"
+      className="flex items-center justify-center bg-accent-light text-accent-dark font-mono font-semibold flex-shrink-0 rounded-[14px]"
       style={{ width: size, height: size, fontSize: size * 0.38 }}
     >
       {item.name[0]?.toUpperCase() ?? '?'}
@@ -687,7 +672,7 @@ function CloseButton({ onClose }: { onClose: () => void }) {
     <button
       onClick={onClose}
       aria-label="Закрыть"
-      className="absolute top-3.5 right-3.5 w-7 h-7 rounded-sm text-text3 text-[15px] flex items-center justify-center hover:bg-surface-hover"
+      className="absolute top-4 right-4 w-9 h-9 rounded-sm text-text3 text-[15px] flex items-center justify-center hover:bg-surface-hover z-10"
     >
       ✕
     </button>
@@ -702,21 +687,23 @@ function Modal({ item, onClose }: { item: DirItem; onClose: () => void }) {
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 bg-ink/40 backdrop-blur-[4px] z-40 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-ink/70 backdrop-blur-[7px] z-40 flex items-center justify-center p-4"
+      role="presentation"
     >
-      <div className="bg-surface border border-line rounded-sm w-[500px] max-w-full max-h-[85vh] overflow-y-auto relative">
+      <div role="dialog" aria-modal="true" aria-labelledby="profile-dialog-title" className="bg-surface border border-line rounded-lg w-[560px] max-w-full max-h-[85vh] overflow-y-auto relative">
         <CloseButton onClose={onClose} />
-        <div className="px-6 pt-6 flex gap-3.5 items-center">
-          <Avatar item={item} size={52} />
+        <div className="h-2 bg-accent" />
+        <div className="px-6 sm:px-8 pt-8 pr-16 flex gap-4 items-center">
+          <Avatar item={item} size={60} />
           <div className="min-w-0">
-            <h2 className="font-mono text-[20px] truncate">{item.name}</h2>
+            <h2 id="profile-dialog-title" className="font-display text-[20px] leading-tight truncate">{item.name}</h2>
             <div className="text-[13px] text-text2 truncate">
               {[item.sphere, place].filter(Boolean).join(' · ') ||
                 (item.telegram ? `@${item.telegram}` : '')}
             </div>
           </div>
         </div>
-        <div className="px-6 py-5">
+        <div className="px-6 sm:px-8 py-7">
           {item.bio && <Section title="О себе">{item.bio}</Section>}
           {item.goal && <Section title="Цель обучения">{item.goal}</Section>}
           {item.niche && <Section title="Специализация">{item.niche}</Section>}
@@ -737,7 +724,7 @@ function Modal({ item, onClose }: { item: DirItem; onClose: () => void }) {
                 href={`https://t.me/${item.telegram}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 px-4 py-2.5 rounded-sm bg-accent text-white text-[13px] font-semibold flex items-center justify-center hover:bg-accent-dark"
+                className="flex-1 px-4 py-3 rounded-sm bg-accent text-ink text-[12px] font-bold flex items-center justify-center hover:bg-accent-dark hover:text-white"
               >
                 Написать в Telegram
               </a>
