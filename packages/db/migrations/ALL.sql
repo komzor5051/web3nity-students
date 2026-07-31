@@ -300,3 +300,11 @@ create policy vibe_recommendations_anon_read on vibe_recommendations
       where sr.id = vibe_recommendations.recommended_id and sr.is_published = true
     )
   );
+
+-- =========================
+-- 0008_self_edited_at.sql
+-- =========================
+-- Явная отметка «ученик правил профиль сам». updated_at для этого не годился:
+-- его меняет и сам импорт, поэтому профиль после первого прогона переставал
+-- обогащаться. Ставит только веб-редактор профиля.
+alter table vibe_students add column if not exists self_edited_at timestamptz;

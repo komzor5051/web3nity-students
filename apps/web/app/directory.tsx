@@ -21,6 +21,19 @@ export type DirItem = {
   workCount: number;
 };
 
+export type GalleryWork = {
+  id: string;
+  title: string;
+  description: string | null;
+  liveUrl: string | null;
+  repoUrl: string | null;
+  screenshotUrl: string | null;
+  stack: string[];
+  authorId: string;
+  authorName: string;
+  authorSlug: string;
+};
+
 type StatusKey = 'all' | 'learning' | 'cofounder' | 'client' | 'none';
 
 const STATUS_OPTS: { key: StatusKey; label: string }[] = [
@@ -55,27 +68,44 @@ function statusKey(s: DirItem['status']): 'learning' | 'cofounder' | 'client' | 
   return null;
 }
 
-function statusText(s: DirItem['status']): string {
+function statusText(s: DirItem['status']): string | null {
   if (s === 'just_learning') return 'Учусь';
   if (s === 'looking_for_partners') return 'Ищу партнёров';
   if (s === 'looking_for_clients') return 'Ищу клиентов';
-  return '—';
+  return null;
 }
 
-function statusColor(s: DirItem['status']): { dot: string; text: string } {
-  const k = statusKey(s);
-  if (k === 'learning') return { dot: 'bg-accent', text: 'text-accent' };
-  if (k === 'cofounder') return { dot: 'bg-accent', text: 'text-accent' };
-  if (k === 'client') return { dot: 'bg-accent', text: 'text-accent' };
-  return { dot: 'bg-text3', text: 'text-text3' };
+/** Домен без схемы и www — подпись к ссылке на работу. */
+function hostLabel(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * Насколько профиль наполнен. По этому порядку идут карточки: человек с
+ * работами и рассказом о себе полезнее пустой строки с одним именем, и
+ * первый экран должен показывать именно его.
+ */
+function fullness(i: DirItem): number {
+  return i.workCount * 100 + (i.bio ? 10 : 0) + (i.city || i.country ? 3 : 0) + (i.sphere ? 2 : 0);
+}
+
+/** У профиля есть что показать в карточке, кроме имени. */
+function hasContent(i: DirItem): boolean {
+  return i.workCount > 0 || Boolean(i.bio);
 }
 
 export default function Directory({
   items,
+  works,
   myId,
   recommendations,
 }: {
   items: DirItem[];
+  works: GalleryWork[];
   myId: string | null;
   recommendations: { item: DirItem; reason: string | null }[];
 }) {
@@ -98,7 +128,6 @@ export default function Directory({
       counts.set(i.sphere, (counts.get(i.sphere) ?? 0) + 1);
     }
     const shared = Array.from(counts.entries())
-      .filter(([, n]) => n >= 2)
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ru'))
       .map(([s]) => s);
     return ['all', ...shared];
@@ -106,9 +135,8 @@ export default function Directory({
 
   const stats = useMemo(() => {
     const countries = new Set(items.map((i) => i.country).filter(Boolean) as string[]);
-    const set = new Set(items.map((i) => i.sphere).filter(Boolean) as string[]);
-    return { total: items.length, countries: countries.size, spheres: set.size };
-  }, [items]);
+    return { total: items.length, countries: countries.size, works: works.length };
+  }, [items, works]);
 
   const term = normalizeSearch(q);
 
@@ -122,7 +150,7 @@ export default function Directory({
   const okSearch = (i: DirItem) => {
     if (!term) return true;
     const hay = normalizeSearch(
-      [i.name, i.niche, i.sphere, i.city, i.country, i.bio].filter(Boolean).join(' '),
+      [i.name, i.niche, i.sphere, i.city, i.country, i.bio, i.telegram].filter(Boolean).join(' '),
     );
     return hay.includes(term);
   };
@@ -166,29 +194,49 @@ export default function Directory({
   }, [items, status, sphere, term]);
 
   const filtered = useMemo(
-    () => items.filter((i) => okStatus(i) && okSphere(i) && okRegion(i) && okSearch(i) && okWorks(i)),
+    () =>
+      items
+        .filter((i) => okStatus(i) && okSphere(i) && okRegion(i) && okSearch(i) && okWorks(i))
+        .sort((a, b) => fullness(b) - fullness(a) || a.name.localeCompare(b.name, 'ru')),
     [items, status, sphere, region, term, onlyWithWorks],
   );
+
+  // Профили без работ и без рассказа о себе — отдельным компактным списком.
+  // Карточка из одного имени и прочерков занимает столько же места, сколько
+  // содержательная, и первый экран превращается в стену пустых плашек.
+  const rich = filtered.filter(hasContent);
+  const plain = filtered.filter((i) => !hasContent(i));
+
+  // Статусов в импортированных данных нет — показывать фильтр, у которого
+  // единственное непустое значение «Без статуса», незачем.
+  const showStatusFilter = statusCounts.all > statusCounts.none;
 
   const opened = openId ? items.find((i) => i.id === openId) ?? null : null;
 
   return (
-    <div className="max-w-[1260px] mx-auto px-6 sm:px-10 py-7 overflow-x-clip">
-      <section className="mb-6">
-        <h1 className="font-mono text-[28px] mb-1.5">Ученики курса по вайб-кодингу</h1>
-        <p className="text-text2 text-sm">
-          Познакомьтесь с другими учениками, найдите партнёров, клиентов или единомышленников.
-          Напишите любому напрямую в Telegram.
+    <div className="max-w-[1180px] mx-auto px-6 sm:px-10 py-10 sm:py-14 overflow-x-clip">
+      <section className="max-w-[720px]">
+        <h1 className="font-mono text-[30px] sm:text-[38px] leading-[1.15] tracking-tight">
+          Работы учеников
+          <br />
+          курса по вайб-кодингу
+        </h1>
+        <p className="text-text2 text-[15px] leading-relaxed mt-4">
+          Сайты и сервисы, собранные участниками курса. Смотрите работы, открывайте профили,
+          пишите авторам напрямую в Telegram.
         </p>
-        <div className="flex flex-wrap gap-4 mt-2.5 text-[13px] text-text3">
-          <StatBadge color="bg-accent" label={`${stats.total} ученик${plural(stats.total)}`} />
-          <StatBadge color="bg-accent" label={`${stats.countries} стран`} />
-          <StatBadge color="bg-accent" label={`${stats.spheres} сфер`} />
-        </div>
+        <dl className="flex flex-wrap gap-x-10 gap-y-3 mt-7 border-t border-line pt-5">
+          <Metric value={stats.works} label={plural(stats.works, 'работа', 'работы', 'работ')} />
+          <Metric
+            value={stats.total}
+            label={plural(stats.total, 'участник', 'участника', 'участников')}
+          />
+          <Metric value={stats.countries} label={plural(stats.countries, 'страна', 'страны', 'стран')} />
+        </dl>
       </section>
 
       {recommendations.length > 0 && (
-        <div className="mb-6">
+        <div className="mt-8">
           <button
             type="button"
             onClick={() => setRecsOpen(true)}
@@ -199,86 +247,198 @@ export default function Directory({
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-3.5">
-        <h2 className="font-mono text-[20px]">Все ученики</h2>
-        <span className="text-[12px] text-text3">{filtered.length} чел.</span>
-      </div>
+      {works.length > 0 && (
+        <section className="mt-14">
+          <SectionHead title="Работы" note={`${works.length}`} />
+          <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-8">
+            {works.map((w, idx) => (
+              <li key={w.id}>
+                <WorkTile work={w} index={idx} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
-      <div className="relative mb-3.5">
-        <SearchIcon />
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Поиск по имени, сфере, городу..."
-          className="w-full pl-10 pr-4 py-2.5 text-[13px] bg-surface border border-line rounded focus:border-accent focus:ring-2 focus:ring-accent-light outline-none"
-        />
-      </div>
+      <section className="mt-16">
+        <SectionHead title="Участники" note={`${filtered.length}`} />
 
-      <div className="flex flex-col gap-3 mb-5">
-        <FilterGroup label="Статус">
-          {STATUS_OPTS.filter(
-            // «Без статуса» прячем, когда таких нет — чтобы не мозолил пустым нулём
-            (o) => o.key !== 'none' || statusCounts.none > 0,
-          ).map((o) => (
-            <Chip key={o.key} active={status === o.key} onClick={() => setStatus(o.key)}>
-              {o.label}
-              <span className="ml-1 opacity-50">{statusCounts[o.key]}</span>
-            </Chip>
-          ))}
-        </FilterGroup>
+        <div className="relative mb-4">
+          <SearchIcon />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Поиск по имени, сфере, городу"
+            className="w-full pl-10 pr-4 py-3 text-[14px] bg-surface border border-line rounded-sm focus:border-accent outline-none"
+          />
+        </div>
 
-        {spheres.length > 1 && (
-          <FilterGroup label="Сфера">
-            {spheres.map((s) => (
-              <Chip key={s} active={sphere === s} onClick={() => setSphere(s)}>
-                {s === 'all' ? 'Все' : s}
-                <span className="ml-1 opacity-50">{sphereCounts.get(s) ?? 0}</span>
+        <div className="flex flex-col gap-3 mb-7">
+          {showStatusFilter && (
+            <FilterGroup label="Статус">
+              {STATUS_OPTS.filter((o) => o.key === 'all' || statusCounts[o.key] > 0).map((o) => (
+                <Chip key={o.key} active={status === o.key} onClick={() => setStatus(o.key)}>
+                  {o.label}
+                  <span className="ml-1.5 opacity-45">{statusCounts[o.key]}</span>
+                </Chip>
+              ))}
+            </FilterGroup>
+          )}
+
+          {spheres.length > 1 && (
+            <FilterGroup label="Сфера">
+              {spheres.map((s) => (
+                <Chip key={s} active={sphere === s} onClick={() => setSphere(s)}>
+                  {s === 'all' ? 'Все' : s}
+                  <span className="ml-1.5 opacity-45">{sphereCounts.get(s) ?? 0}</span>
+                </Chip>
+              ))}
+            </FilterGroup>
+          )}
+
+          <FilterGroup label="Регион">
+            {REGION_OPTS.filter((r) => r === 'Все' || (regionCounts.get(r) ?? 0) > 0).map((r) => (
+              <Chip key={r} active={region === r} onClick={() => setRegion(r)}>
+                {r}
+                <span className="ml-1.5 opacity-45">{regionCounts.get(r) ?? 0}</span>
               </Chip>
             ))}
           </FilterGroup>
-        )}
 
-        <FilterGroup label="Регион">
-          {REGION_OPTS.map((r) => (
-            <Chip key={r} active={region === r} onClick={() => setRegion(r)}>
-              {r}
-              <span className="ml-1 opacity-50">{regionCounts.get(r) ?? 0}</span>
-            </Chip>
-          ))}
-        </FilterGroup>
-
-        <label className="flex items-center gap-2 text-[12px] text-text2 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={onlyWithWorks}
-            onChange={(e) => setOnlyWithWorks(e.target.checked)}
-            className="accent-accent"
-          />
-          Только с работами
-        </label>
-      </div>
-
-      {filtered.length === 0 ? (
-        <div className="text-center py-12 text-text3">
-          <div className="text-3xl mb-2">·</div>
-          <h3 className="font-mono text-[15px] text-text2 mb-1">Никого не нашли</h3>
-          <p className="text-[13px]">Попробуйте изменить фильтры</p>
+          <label className="flex items-center gap-2 text-[13px] text-text2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={onlyWithWorks}
+              onChange={(e) => setOnlyWithWorks(e.target.checked)}
+              className="accent-accent"
+            />
+            Только с работами
+          </label>
         </div>
-      ) : (
-        <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {filtered.map((s, idx) => (
-            <li key={s.id}>
-              <Card item={s} index={idx} isMe={!!myId && s.id === myId} onOpen={() => setOpenId(s.id)} />
-            </li>
-          ))}
-        </ul>
-      )}
+
+        {filtered.length === 0 ? (
+          <div className="border border-line rounded-sm py-16 text-center">
+            <h3 className="font-mono text-[15px] text-ink mb-1">Никого не нашли</h3>
+            <p className="text-[13px] text-text2">Попробуйте изменить фильтры</p>
+          </div>
+        ) : (
+          <>
+            {rich.length > 0 && (
+              <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {rich.map((s, idx) => (
+                  <li key={s.id}>
+                    <Card
+                      item={s}
+                      index={idx}
+                      isMe={!!myId && s.id === myId}
+                      onOpen={() => setOpenId(s.id)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {plain.length > 0 && (
+              <div className={rich.length > 0 ? 'mt-10' : ''}>
+                <h3 className="font-mono text-[12px] uppercase tracking-[.08em] text-text3 mb-3">
+                  Ещё {plain.length} {plural(plain.length, 'участник', 'участника', 'участников')} —
+                  профиль пока не заполнен
+                </h3>
+                <ul className="border-t border-line">
+                  {plain.map((s) => (
+                    <PlainRow
+                      key={s.id}
+                      item={s}
+                      isMe={!!myId && s.id === myId}
+                      onOpen={() => setOpenId(s.id)}
+                    />
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
+      </section>
 
       {opened && <Modal item={opened} onClose={() => setOpenId(null)} />}
       {recsOpen && (
         <RecsModal recommendations={recommendations} onClose={() => setRecsOpen(false)} />
       )}
     </div>
+  );
+}
+
+function SectionHead({ title, note }: { title: string; note: string }) {
+  return (
+    <div className="flex items-baseline justify-between border-b border-line pb-3 mb-6">
+      <h2 className="font-mono text-[20px] tracking-tight">{title}</h2>
+      <span className="font-mono text-[12px] text-text3">{note}</span>
+    </div>
+  );
+}
+
+function Metric({ value, label }: { value: number; label: string }) {
+  return (
+    <div>
+      <dt className="sr-only">{label}</dt>
+      <dd className="font-mono text-[26px] leading-none">{value}</dd>
+      <div className="text-[12px] text-text3 mt-1.5">{label}</div>
+    </div>
+  );
+}
+
+function WorkTile({ work, index }: { work: GalleryWork; index: number }) {
+  const url = work.liveUrl ?? work.repoUrl;
+  return (
+    <article
+      className="vibe-card-anim group flex flex-col"
+      style={{ animationDelay: `${Math.min(index, 12) * 0.03}s` }}
+    >
+      <Link
+        href={`/w/${work.id}`}
+        className="block border border-line bg-surface overflow-hidden rounded-sm group-hover:border-accent transition-colors"
+      >
+        {work.screenshotUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={work.screenshotUrl}
+            alt={work.title}
+            loading="lazy"
+            className="w-full aspect-[16/10] object-cover object-top"
+          />
+        ) : (
+          <div className="w-full aspect-[16/10] bg-accent-light flex items-center justify-center px-4">
+            <span className="font-mono text-[12px] text-accent text-center break-all">
+              {url ? hostLabel(url) : 'без ссылки'}
+            </span>
+          </div>
+        )}
+      </Link>
+      <div className="pt-3">
+        <Link href={`/w/${work.id}`} className="text-[14px] font-semibold leading-snug hover:text-accent">
+          {work.title}
+        </Link>
+        <div className="mt-1 flex items-baseline gap-1.5 text-[12px] text-text2 min-w-0">
+          <Link href={`/s/${work.authorSlug}`} className="hover:text-accent shrink-0 truncate max-w-[45%]">
+            {work.authorName}
+          </Link>
+          {url && (
+            <>
+              <span className="text-text3">·</span>
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={hostLabel(url)}
+                className="font-mono text-text3 hover:text-accent truncate"
+              >
+                {hostLabel(url)}
+              </a>
+            </>
+          )}
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -296,34 +456,28 @@ function RecsModal({
       }}
       className="fixed inset-0 bg-ink/40 backdrop-blur-[4px] z-40 flex items-center justify-center p-4"
     >
-      <div className="bg-surface border border-line rounded-lg w-[560px] max-w-full max-h-[85vh] overflow-y-auto relative">
-        <button
-          onClick={onClose}
-          className="absolute top-3.5 right-3.5 bg-surface-hover w-7 h-7 rounded-full text-text2 text-[13px] flex items-center justify-center hover:bg-line"
-        >
-          ✕
-        </button>
+      <div className="bg-surface border border-line rounded-sm w-[560px] max-w-full max-h-[85vh] overflow-y-auto relative">
+        <CloseButton onClose={onClose} />
         <div className="px-6 pt-6 pb-2">
           <h2 className="font-mono text-[20px] mb-0.5">Ваши рекомендации</h2>
           <p className="text-[13px] text-text2">
-            Ученики курса по вайб-кодингу, с которыми вам стоит познакомиться.
+            Участники курса, с которыми вам стоит познакомиться.
           </p>
         </div>
         <ul className="px-6 py-4 space-y-3">
           {recommendations.map(({ item, reason }) => (
-            <li key={item.id} className="bg-surface border border-line rounded-lg p-4">
+            <li key={item.id} className="border border-line rounded-sm p-4">
               <div className="flex items-start gap-3">
-                <Avatar item={item} size={48} radius={12} />
+                <Avatar item={item} size={44} />
                 <div className="min-w-0 flex-1">
                   <div className="font-semibold text-[14px] truncate">{item.name}</div>
                   <div className="text-[12px] text-text3 truncate">
-                    {[item.niche, item.city || item.country].filter(Boolean).join(' · ') || '—'}
+                    {[item.niche, item.city || item.country].filter(Boolean).join(' · ')}
                   </div>
                   {reason && (
-                    <div className="mt-2.5 flex gap-2 rounded bg-accent-light px-3 py-2">
-                      <span className="text-accent shrink-0 mt-px">›</span>
-                      <p className="text-[13px] text-tag-text leading-snug">{reason}</p>
-                    </div>
+                    <p className="mt-2.5 border-l-2 border-accent pl-3 text-[13px] text-text2 leading-snug">
+                      {reason}
+                    </p>
                   )}
                   <div className="mt-3 flex gap-2 flex-wrap">
                     {item.telegram && (
@@ -331,14 +485,14 @@ function RecsModal({
                         href={`https://t.me/${item.telegram}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[12px] px-3 py-1.5 rounded-full bg-accent text-white hover:bg-accent-dark"
+                        className="text-[12px] px-3 py-1.5 rounded-sm bg-accent text-white hover:bg-accent-dark"
                       >
                         Написать
                       </a>
                     )}
                     <Link
                       href={`/s/${item.slug}`}
-                      className="text-[12px] px-3 py-1.5 rounded-full border border-line text-text2 hover:border-accent hover:text-accent"
+                      className="text-[12px] px-3 py-1.5 rounded-sm border border-line text-text2 hover:border-accent hover:text-accent"
                     >
                       Открыть профиль
                     </Link>
@@ -353,20 +507,11 @@ function RecsModal({
   );
 }
 
-function StatBadge({ color, label }: { color: string; label: string }) {
-  return (
-    <span className="flex items-center gap-1.5">
-      <span className={`w-2 h-2 rounded-full ${color}`} />
-      {label}
-    </span>
-  );
-}
-
 function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-1.5">
-      <span className="text-[11px] text-text3 uppercase tracking-[.5px] font-medium mr-0.5 shrink-0 pt-1.5">
-        {label}:
+    <div className="flex items-start gap-2">
+      <span className="text-[11px] text-text3 uppercase tracking-[.5px] font-medium shrink-0 pt-1.5 w-[52px]">
+        {label}
       </span>
       <div className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0">
         {children}
@@ -388,7 +533,7 @@ function Chip({
     <button
       type="button"
       onClick={onClick}
-      className={`px-3 py-1.5 rounded-full text-[12px] border transition-colors whitespace-nowrap touch-manipulation ${
+      className={`px-3 py-1.5 rounded-sm text-[12px] border transition-colors whitespace-nowrap touch-manipulation ${
         active
           ? 'bg-ink text-white border-ink'
           : 'bg-surface text-text2 border-line hover:border-text3'
@@ -416,62 +561,63 @@ function SearchIcon() {
   );
 }
 
-function Card({ item, index, isMe, onOpen }: { item: DirItem; index: number; isMe: boolean; onOpen: () => void }) {
-  const color = statusColor(item.status);
+function Card({
+  item,
+  index,
+  isMe,
+  onOpen,
+}: {
+  item: DirItem;
+  index: number;
+  isMe: boolean;
+  onOpen: () => void;
+}) {
+  const place = [item.city, item.country].filter(Boolean).join(', ');
+  const status = statusText(item.status);
   return (
     <button
       onClick={onOpen}
-      className={`vibe-card-anim text-left w-full bg-surface border rounded p-[18px] hover:border-accent hover:-translate-y-0.5 transition-all ${
+      className={`vibe-card-anim text-left w-full h-full bg-surface border rounded-sm p-5 flex flex-col hover:border-accent transition-colors ${
         isMe ? 'border-accent' : 'border-line'
       }`}
-      style={{ animationDelay: `${index * 0.03}s` }}
+      style={{ animationDelay: `${Math.min(index, 12) * 0.03}s` }}
     >
-      <div className="flex gap-3 mb-2.5">
-        <Avatar item={item} size={40} radius={10} />
+      <div className="flex gap-3 items-center">
+        <Avatar item={item} size={40} />
         <div className="min-w-0 flex-1">
           <div className="font-semibold text-[14px] truncate flex items-center gap-1.5">
             {item.name}
             {isMe && (
-              <span className="shrink-0 text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-accent text-white">
+              <span className="shrink-0 text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-accent text-white">
                 это вы
               </span>
             )}
           </div>
-          <div className="text-[11px] text-text3 flex items-center gap-1 truncate">
-            <PinIcon />
-            <span className="truncate">
-              {[item.city, item.country].filter(Boolean).join(', ') || '—'}
-            </span>
+          <div className="text-[12px] text-text3 truncate">
+            {[item.sphere, place].filter(Boolean).join(' · ') ||
+              (item.telegram ? `@${item.telegram}` : '')}
           </div>
         </div>
       </div>
+
       {item.bio && (
-        <p className="text-[12px] text-text2 leading-[1.5] mb-2.5 line-clamp-2">{item.bio}</p>
+        <p className="text-[13px] text-text2 leading-[1.55] mt-3.5 line-clamp-3">{item.bio}</p>
       )}
-      {item.sphere && (
-        <div className="mb-2.5">
-          <span className="inline-block max-w-full truncate align-bottom px-2 py-0.5 rounded-full text-[10px] font-medium bg-tag-bg text-tag-text">
-            {item.sphere}
-          </span>
-        </div>
-      )}
-      <div className="flex justify-between items-center pt-2.5 border-t border-line-light">
-        <div className="flex items-center gap-2.5">
-          <div className={`flex items-center gap-1.5 text-[11px] font-medium ${color.text}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${color.dot}`} />
-            {statusText(item.status)}
-          </div>
-          <span className="font-mono text-[12px] text-text3">{item.workCount} работ</span>
-        </div>
+
+      <div className="mt-auto pt-4 flex justify-between items-center gap-3">
+        <span className="font-mono text-[12px] text-text3">
+          {item.workCount > 0
+            ? `${item.workCount} ${plural(item.workCount, 'работа', 'работы', 'работ')}`
+            : status ?? ''}
+        </span>
         {item.telegram ? (
           <a
             onClick={(e) => e.stopPropagation()}
             href={`https://t.me/${item.telegram}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="px-3 py-1 rounded-full border border-line bg-transparent text-[11px] text-text2 hover:bg-accent hover:text-white hover:border-accent transition-colors flex items-center gap-1"
+            className="px-3 py-1.5 rounded-sm border border-line text-[12px] text-text2 hover:bg-accent hover:text-white hover:border-accent transition-colors"
           >
-            <ChatIcon size={12} />
             Написать
           </a>
         ) : null}
@@ -480,7 +626,39 @@ function Card({ item, index, isMe, onOpen }: { item: DirItem; index: number; isM
   );
 }
 
-function Avatar({ item, size, radius }: { item: DirItem; size: number; radius: number }) {
+/** Строка для профиля, у которого пока нет ни работ, ни рассказа о себе. */
+function PlainRow({ item, isMe, onOpen }: { item: DirItem; isMe: boolean; onOpen: () => void }) {
+  return (
+    <li className="border-b border-line">
+      <div className="flex items-center gap-3 py-2.5">
+        <button onClick={onOpen} className="flex items-center gap-3 min-w-0 flex-1 text-left">
+          <Avatar item={item} size={28} />
+          <span className="text-[13px] truncate">
+            {item.name}
+            {isMe && <span className="ml-2 text-[11px] text-accent">это вы</span>}
+          </span>
+          {(item.city || item.country) && (
+            <span className="text-[12px] text-text3 truncate hidden sm:inline">
+              {[item.city, item.country].filter(Boolean).join(', ')}
+            </span>
+          )}
+        </button>
+        {item.telegram ? (
+          <a
+            href={`https://t.me/${item.telegram}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-mono text-[12px] text-text3 hover:text-accent shrink-0"
+          >
+            @{item.telegram}
+          </a>
+        ) : null}
+      </div>
+    </li>
+  );
+}
+
+function Avatar({ item, size }: { item: DirItem; size: number }) {
   if (item.avatarUrl) {
     // eslint-disable-next-line @next/next/no-img-element
     return (
@@ -489,45 +667,36 @@ function Avatar({ item, size, radius }: { item: DirItem; size: number; radius: n
         alt={item.name}
         width={size}
         height={size}
-        className="object-cover flex-shrink-0"
-        style={{ width: size, height: size, borderRadius: radius }}
+        className="object-cover flex-shrink-0 rounded-sm"
+        style={{ width: size, height: size }}
       />
     );
   }
   return (
     <div
-      className="flex items-center justify-center bg-accent-light text-accent font-mono font-semibold flex-shrink-0"
-      style={{
-        width: size,
-        height: size,
-        borderRadius: radius,
-        fontSize: size * 0.38,
-      }}
+      className="flex items-center justify-center bg-accent-light text-accent font-mono font-semibold flex-shrink-0 rounded-sm"
+      style={{ width: size, height: size, fontSize: size * 0.38 }}
     >
       {item.name[0]?.toUpperCase() ?? '?'}
     </div>
   );
 }
 
-function PinIcon() {
+function CloseButton({ onClose }: { onClose: () => void }) {
   return (
-    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-      <circle cx="12" cy="10" r="3" />
-    </svg>
-  );
-}
-
-function ChatIcon({ size = 13 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    </svg>
+    <button
+      onClick={onClose}
+      aria-label="Закрыть"
+      className="absolute top-3.5 right-3.5 w-7 h-7 rounded-sm text-text3 text-[15px] flex items-center justify-center hover:bg-surface-hover"
+    >
+      ✕
+    </button>
   );
 }
 
 function Modal({ item, onClose }: { item: DirItem; onClose: () => void }) {
-  const color = statusColor(item.status);
+  const place = [item.city, item.country].filter(Boolean).join(', ');
+  const status = statusText(item.status);
   return (
     <div
       onClick={(e) => {
@@ -535,20 +704,15 @@ function Modal({ item, onClose }: { item: DirItem; onClose: () => void }) {
       }}
       className="fixed inset-0 bg-ink/40 backdrop-blur-[4px] z-40 flex items-center justify-center p-4"
     >
-      <div className="bg-surface border border-line rounded-lg w-[500px] max-w-full max-h-[85vh] overflow-y-auto relative">
-        <button
-          onClick={onClose}
-          className="absolute top-3.5 right-3.5 bg-surface-hover w-7 h-7 rounded-full text-text2 text-[13px] flex items-center justify-center hover:bg-line"
-        >
-          ✕
-        </button>
-        <div className="px-6 pt-6 flex gap-3.5">
-          <Avatar item={item} size={52} radius={13} />
-          <div>
-            <h2 className="font-mono text-[20px] mb-0.5">{item.name}</h2>
-            <div className="text-[13px] text-text2">
-              {[item.city, item.country].filter(Boolean).join(', ')}
-              {item.sphere ? ` · ${item.sphere}` : ''}
+      <div className="bg-surface border border-line rounded-sm w-[500px] max-w-full max-h-[85vh] overflow-y-auto relative">
+        <CloseButton onClose={onClose} />
+        <div className="px-6 pt-6 flex gap-3.5 items-center">
+          <Avatar item={item} size={52} />
+          <div className="min-w-0">
+            <h2 className="font-mono text-[20px] truncate">{item.name}</h2>
+            <div className="text-[13px] text-text2 truncate">
+              {[item.sphere, place].filter(Boolean).join(' · ') ||
+                (item.telegram ? `@${item.telegram}` : '')}
             </div>
           </div>
         </div>
@@ -556,34 +720,25 @@ function Modal({ item, onClose }: { item: DirItem; onClose: () => void }) {
           {item.bio && <Section title="О себе">{item.bio}</Section>}
           {item.goal && <Section title="Цель обучения">{item.goal}</Section>}
           {item.niche && <Section title="Специализация">{item.niche}</Section>}
-          {item.sphere && (
-            <div className="mb-4">
-              <h4 className="text-[10px] uppercase tracking-[.8px] text-text3 mb-1.5 font-medium">
-                Сфера
-              </h4>
-              <span className="inline-block max-w-full break-words px-3 py-1 rounded-full bg-tag-bg text-tag-text text-[12px]">
-                {item.sphere}
-              </span>
-            </div>
+          {status && <Section title="Статус">{status}</Section>}
+          {item.workCount > 0 && (
+            <Section title="Работы">
+              {item.workCount} {plural(item.workCount, 'работа', 'работы', 'работ')} — смотрите в профиле
+            </Section>
           )}
-          <div className="mb-4">
-            <h4 className="text-[10px] uppercase tracking-[.8px] text-text3 mb-1.5 font-medium">
-              Статус
-            </h4>
-            <div className={`flex items-center gap-1.5 text-[13px] ${color.text}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${color.dot}`} />
-              {statusText(item.status)}
-            </div>
-          </div>
-          <div className="flex gap-2 pt-4 border-t border-line-light">
+          {!item.bio && !item.goal && !item.niche && (
+            <p className="text-[13px] text-text2 mb-4">
+              Участник пока не рассказал о себе. Напишите ему в Telegram — контакт ниже.
+            </p>
+          )}
+          <div className="flex gap-2 pt-4 border-t border-line">
             {item.telegram ? (
               <a
                 href={`https://t.me/${item.telegram}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 px-4 py-2.5 rounded-sm bg-accent text-white text-[13px] font-semibold flex items-center justify-center gap-1.5 hover:bg-accent-dark"
+                className="flex-1 px-4 py-2.5 rounded-sm bg-accent text-white text-[13px] font-semibold flex items-center justify-center hover:bg-accent-dark"
               >
-                <ChatIcon size={15} />
                 Написать в Telegram
               </a>
             ) : (
@@ -593,9 +748,9 @@ function Modal({ item, onClose }: { item: DirItem; onClose: () => void }) {
             )}
             <Link
               href={`/s/${item.slug}`}
-              className="px-4 py-2.5 rounded-sm bg-surface border border-line text-[13px] text-text2 hover:bg-surface-hover"
+              className="px-4 py-2.5 rounded-sm border border-line text-[13px] text-text2 hover:border-accent hover:text-accent"
             >
-              Открыть
+              Профиль
             </Link>
           </div>
         </div>
@@ -615,11 +770,12 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function plural(n: number): string {
+/** Русское склонение после числа: 1 работа, 2 работы, 5 работ. */
+export function plural(n: number, one: string, few: string, many: string): string {
   const mod10 = n % 10;
   const mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 14) return 'ов';
-  if (mod10 === 1) return '';
-  if (mod10 >= 2 && mod10 <= 4) return 'а';
-  return 'ов';
+  if (mod100 >= 11 && mod100 <= 14) return many;
+  if (mod10 === 1) return one;
+  if (mod10 >= 2 && mod10 <= 4) return few;
+  return many;
 }

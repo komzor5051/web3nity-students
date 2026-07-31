@@ -41,6 +41,8 @@ export async function updateProfile(_prev: ActionResult | null, form: FormData):
     status,
     // Профиль виден всем по умолчанию и скрыть его нельзя (политика витрины).
     is_published: true,
+    // Отметка «правил сам»: с этого момента импорт профиль не трогает.
+    self_edited_at: new Date().toISOString(),
   };
 
   // Авто-сфера: определяем из ниши/профиля одну из уже существующих сфер, чтобы

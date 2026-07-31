@@ -8,6 +8,8 @@ import {
   introFrom,
   workFrom,
   titleFromUrl,
+  sphereFrom,
+  looksLikeName,
 } from '../src/heuristics.js';
 import type { GroupedPost } from '../src/group.js';
 
@@ -106,6 +108,31 @@ describe('cityFrom', () => {
   it('без города не выдумывает', () => {
     expect(cityFrom('Всем привет, занимаюсь логистикой')).toEqual({ city: null, country: null });
   });
+
+  it('зарубежный город даёт свою страну, а не Россию', () => {
+    expect(cityFrom('Я — Марина, живу в Копенгагене')).toEqual({
+      city: 'Копенгаген',
+      country: 'Дания',
+    });
+  });
+
+  it('без города берёт страну', () => {
+    expect(cityFrom('Меня зовут Вацловас. Живу в Норвегии.')).toEqual({
+      city: null,
+      country: 'Норвегия',
+    });
+  });
+});
+
+describe('sphereFrom', () => {
+  it('находит сферу по роду занятий', () => {
+    expect(sphereFrom('Занимаюсь логистикой и таможенным оформлением')).toBe('Логистика');
+    expect(sphereFrom('Я юрист, веду корпоративное право')).toBe('Юриспруденция');
+  });
+
+  it('без узнаваемого занятия не выдумывает', () => {
+    expect(sphereFrom('Просто пришёл учиться новому')).toBeNull();
+  });
 });
 
 describe('introFrom', () => {
@@ -126,6 +153,31 @@ describe('workFrom', () => {
 
   it('реплика без ссылки анонсом не считается', () => {
     expect(workFrom(post('Круто получилось, поздравляю!')).isAnnouncement).toBe(false);
+  });
+});
+
+describe('looksLikeName', () => {
+  it('короткое название без точки — название', () => {
+    expect(looksLikeName('Kavkaz Route Hub')).toBe(true);
+  });
+
+  it('фраза из чата названием не считается', () => {
+    expect(looksLikeName('Уважаемые коллеги, делюсь своим первым опытом.')).toBe(false);
+    expect(looksLikeName('Я создал очень крутой ассистент!')).toBe(false);
+  });
+});
+
+describe('workFrom с фразой вместо названия', () => {
+  it('берёт имя из адреса, а фразу оставляет в описании', () => {
+    const work = workFrom(post('Я создал очень крутой ассистент!\nhttps://nihad-legal.lovable.app'));
+    expect(work.title).toBe('Nihad Legal');
+    expect(work.description).toContain('крутой ассистент');
+  });
+});
+
+describe('хэштег ветки', () => {
+  it('не попадает в текст профиля', () => {
+    expect(titleFrom('#обомне Меня зовут Денис')).toBe('Меня зовут Денис');
   });
 });
 

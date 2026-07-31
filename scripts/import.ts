@@ -8,7 +8,7 @@
  * Идемпотентность:
  *   - raw_messages по `tg:<chat_id>:<message_id>` — UPSERT
  *   - students по (cohort, import_key) — UPSERT, не перетирает то,
- *     что ученик отредактировал сам (updated_at свежее поста > 60 c)
+ *     что ученик отредактировал сам (self_edited_at)
  *   - works по source_message_id — UPSERT, is_published не трогается
  */
 
@@ -33,6 +33,8 @@ import {
   isMeaningfulIntro,
   introFrom,
   workFrom,
+  sphereFrom,
+  collectParticipants,
   type ExtractResult,
   type GroupedPost,
   type IntroFields,
@@ -72,6 +74,7 @@ export interface StudentPayload {
   city: string | null;
   country: string | null;
   niche: string | null;
+  sphere: string | null;
   bio: string | null;
   goal: string | null;
   expertise: string | null;
@@ -93,12 +96,6 @@ export interface WorkPayload {
   source_message_id: string;
   posted_at: string | null;
   is_published: boolean;
-}
-
-/** Пара «что писать» + «когда пост опубликован» — нужна mergeStudentFields для порога ручной правки. */
-interface StudentRecord {
-  payload: StudentPayload;
-  postedAt: string | null;
 }
 
 interface RawRow {
@@ -136,6 +133,9 @@ export function buildStudentPayload(input: {
     city: intro.city ?? null,
     country: intro.country ?? null,
     niche: intro.niche ?? null,
+    // Сфера — общая категория для фильтра на витрине. Ниша у каждого своя
+    // («мастер цигун»), фильтровать по ней нельзя, а по сфере — можно.
+    sphere: intro.bio ? sphereFrom(intro.bio) : null,
     bio: intro.bio ?? null,
     goal: intro.goal ?? null,
     expertise: intro.expertise ?? null,
@@ -238,27 +238,22 @@ export function buildWorkPayload(input: {
   };
 }
 
-/** Запас на расхождение часов и на задержку между постом и записью в БД. */
-const MANUAL_EDIT_THRESHOLD_MS = 60_000;
-
 /**
  * Какие поля профиля импорт вправе записать.
  *
- * Пусто, если ученик редактировал профиль сам: считаем правкой всё, что
- * произошло позже поста больше чем на порог. Также никогда не затираем
- * заполненное поле пустым значением из импорта.
+ * Пусто, если ученик редактировал профиль сам — это отмечает self_edited_at,
+ * который ставит только веб-редактор. Раньше признаком служило «updated_at
+ * свежее поста», но updated_at меняет и сам импорт, поэтому профиль после
+ * первого прогона переставал обогащаться вовсе.
+ *
+ * Заполненное поле пустым значением из импорта не затираем никогда.
  */
 export function mergeStudentFields(
   payload: Record<string, unknown>,
-  existing: ({ updated_at: string } & Record<string, unknown>) | null,
-  postedAt: string | null,
+  existing: ({ self_edited_at?: string | null } & Record<string, unknown>) | null,
 ): Record<string, unknown> {
   if (!existing) return { ...payload };
-
-  if (postedAt) {
-    const edited = Date.parse(existing.updated_at) - Date.parse(postedAt);
-    if (Number.isFinite(edited) && edited > MANUAL_EDIT_THRESHOLD_MS) return {};
-  }
+  if (existing.self_edited_at) return {};
 
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(payload)) {
@@ -325,7 +320,7 @@ function isNewerPost(candidate: string | null, current: string | null): boolean 
 
 async function run(args: Args): Promise<{ failures: FailureContext[] }> {
   const chats = await readDump(args.dumpFile);
-  const students: StudentRecord[] = [];
+  const students: StudentPayload[] = [];
   const works: WorkPayload[] = [];
   const rawRows: RawRow[] = [];
   const failures: FailureContext[] = [];
@@ -378,8 +373,8 @@ async function run(args: Args): Promise<{ failures: FailureContext[] }> {
       // Второй фильтр — уже по содержимому: Gemini иногда возвращает intro
       // с одним лишь именем для короткой реплики. Одно имя — не профиль.
       if (!intro || !isMeaningfulIntro(intro)) continue;
-      students.push({
-        payload: buildStudentPayload({
+      students.push(
+        buildStudentPayload({
           chatId: chat.chatId,
           authorName: post.authorName,
           authorUsername: usernames.get(post.authorName) ?? null,
@@ -387,8 +382,7 @@ async function run(args: Args): Promise<{ failures: FailureContext[] }> {
           intro,
           importKey: authorKeyOf(post.authorName, post.authorId, ambiguous),
         }),
-        postedAt: post.postedAt,
-      });
+      );
     }
 
     // Работы из общей ветки. Тот же фильтр длины: реплика в три слова не
@@ -435,8 +429,8 @@ async function run(args: Args): Promise<{ failures: FailureContext[] }> {
       // Остальные (куратор, тёзка из другой ветки) в работы не попадают.
       const ownerId = resolveTopicOwnerId(messages, studentName);
 
-      students.push({
-        payload: buildStudentPayload({
+      students.push(
+        buildStudentPayload({
           chatId: chat.chatId,
           authorName: studentName,
           authorUsername: usernames.get(studentName) ?? null,
@@ -444,8 +438,7 @@ async function run(args: Args): Promise<{ failures: FailureContext[] }> {
           intro: {},
           importKey: authorKeyOf(studentName, ownerId, ambiguous),
         }),
-        postedAt: null,
-      });
+      );
 
       const own = messages.filter((m) =>
         ownerId !== null ? m.authorId === ownerId : m.authorName === studentName,
@@ -473,6 +466,28 @@ async function run(args: Args): Promise<{ failures: FailureContext[] }> {
         if (payload) works.push(payload);
       }
     }
+
+    // Участники: профиль каждому, кто вообще писал в чат. Половина людей в
+    // ветку знакомств не написала, а контакт нужен и от них — витрина ради
+    // контактов и делается. Рассказ о себе у таких обычно есть в другой
+    // ветке: ищем его по маркерам, не нашли — профиль остаётся коротким.
+    //
+    // Идут последними: у кого профиль уже собран из ветки знакомств или из
+    // VIP-ветки, тот остаётся с ним — там разбор точнее.
+    const visible = [...byKind.values()].flat();
+    for (const p of collectParticipants(visible)) {
+      const intro = p.intro ? introFrom(p.intro) : {};
+      students.push(
+        buildStudentPayload({
+          chatId: chat.chatId,
+          authorName: p.authorName,
+          authorUsername: usernames.get(p.authorName) ?? null,
+          rootMessageId: p.intro?.rootMessageId ?? p.firstMessageId,
+          intro,
+          importKey: authorKeyOf(p.authorName, p.authorId, ambiguous),
+        }),
+      );
+    }
   }
 
   // Один и тот же проект нередко анонсируют, а потом дорабатывают отдельным
@@ -494,6 +509,7 @@ async function run(args: Args): Promise<{ failures: FailureContext[] }> {
   const db = getServiceClient();
   await writeAll(db, students, dedupedWorks, rawRows);
   await fillContacts(db, chats);
+  await mergeDuplicateProfiles(db);
   printFailureSummary(failures);
   return { failures };
 }
@@ -543,6 +559,80 @@ export async function fillContacts(db: SupabaseClient, chats: ChatDump[]): Promi
   console.log(`[upsert] контакты дописаны: ${filled}`);
 }
 
+/** Поля профиля, которые при слиянии дублей можно перенести с запасной записи. */
+const MERGEABLE_FIELDS = [
+  'city', 'country', 'niche', 'sphere', 'bio', 'goal', 'expertise', 'hobbies', 'status', 'avatar_url',
+] as const;
+
+/**
+ * Насколько профиль содержателен. Решает, какая из записей одного человека
+ * останется главной.
+ */
+export function profileWeight(row: Record<string, unknown>): number {
+  let weight = typeof row.bio === 'string' ? row.bio.length : 0;
+  for (const field of MERGEABLE_FIELDS) if (row[field]) weight += 10;
+  return weight;
+}
+
+/**
+ * Схлопывает профили одного человека.
+ *
+ * Один и тот же ученик пишет и в общий чат, и в VIP-ветку — а cohort входит
+ * в ключ профиля, поэтому получаются две записи. Настоящий идентификатор
+ * человека — его @username: по нему и объединяем, перенося работы и
+ * недостающие поля на самую содержательную запись.
+ */
+export async function mergeDuplicateProfiles(db: SupabaseClient): Promise<number> {
+  const { data, error } = await db
+    .from(tbl('students'))
+    .select('*')
+    .not('telegram_username', 'is', null);
+  if (error) throw error;
+
+  const groups = new Map<string, Record<string, unknown>[]>();
+  for (const row of (data ?? []) as Record<string, unknown>[]) {
+    const key = String(row.telegram_username).toLowerCase();
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+
+  let merged = 0;
+  for (const rows of groups.values()) {
+    if (rows.length < 2) continue;
+    const sorted = [...rows].sort((a, b) => profileWeight(b) - profileWeight(a));
+    const [winner, ...rest] = sorted as [Record<string, unknown>, ...Record<string, unknown>[]];
+
+    // Недостающее у главной записи добираем из запасных — человек мог
+    // рассказать о городе в одном чате, а о нише в другом.
+    const patch: Record<string, unknown> = {};
+    for (const field of MERGEABLE_FIELDS) {
+      if (winner[field]) continue;
+      const donor = rest.find((r) => r[field]);
+      if (donor) patch[field] = donor[field];
+    }
+    if (Object.keys(patch).length > 0) {
+      const { error: patchError } = await db
+        .from(tbl('students'))
+        .update(patch)
+        .eq('id', winner.id as string);
+      if (patchError) throw patchError;
+    }
+
+    const loserIds = rest.map((r) => r.id as string);
+    const { error: moveError } = await db
+      .from(tbl('works'))
+      .update({ student_id: winner.id as string })
+      .in('student_id', loserIds);
+    if (moveError) throw moveError;
+
+    const { error: deleteError } = await db.from(tbl('students')).delete().in('id', loserIds);
+    if (deleteError) throw deleteError;
+    merged += loserIds.length;
+  }
+
+  console.log(`[merge] дублей профилей схлопнуто: ${merged}`);
+  return merged;
+}
+
 /**
  * Печатает сбои заметно и отдельно от обычного лога — их легко потерять
  * в потоке [upsert]/[dry]-строк, а именно они означают, что результат
@@ -568,7 +658,7 @@ function printFailureSummary(failures: FailureContext[]): void {
 
 async function writeAll(
   db: SupabaseClient,
-  students: StudentRecord[],
+  students: StudentPayload[],
   works: WorkPayload[],
   rawRows: RawRow[],
 ): Promise<void> {
@@ -584,11 +674,11 @@ async function writeAll(
   // только тех полей, что импорту разрешено писать.
   const studentIdByKey = new Map<string, string>();
   let studentCount = 0;
-  for (const { payload, postedAt } of students) {
+  for (const payload of students) {
     const key = `${payload.cohort}::${payload.import_key}`;
     if (studentIdByKey.has(key)) continue; // уже обработан в этом прогоне
 
-    const id = await upsertStudent(db, payload, postedAt);
+    const id = await upsertStudent(db, payload);
     studentIdByKey.set(key, id);
     studentCount++;
   }
@@ -612,19 +702,18 @@ async function writeAll(
 async function upsertStudent(
   db: SupabaseClient,
   payload: StudentPayload,
-  postedAt: string | null,
 ): Promise<string> {
   const { cohort, import_key, ...rest } = payload;
   const { data: existing, error: selectError } = await db
     .from(tbl('students'))
-    .select('id, updated_at')
+    .select('id, self_edited_at')
     .eq('cohort', cohort)
     .eq('import_key', import_key)
     .maybeSingle();
   if (selectError) throw selectError;
 
   if (existing) {
-    const merged = mergeStudentFields(rest, existing as { updated_at: string }, postedAt);
+    const merged = mergeStudentFields(rest, existing as { self_edited_at: string | null });
     if (Object.keys(merged).length > 0) {
       const { error } = await db.from(tbl('students')).update(merged).eq('id', existing.id);
       if (error) throw error;

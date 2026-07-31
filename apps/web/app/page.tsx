@@ -1,7 +1,8 @@
 import { supabase, studentSlug, tbl, type StudentRow, type WorkRow } from '@/lib/db';
 import { getCurrentStudent, serviceClient } from '@/lib/auth';
 import { resolveRegion } from '@/lib/region';
-import Directory, { type DirItem } from './directory';
+import { workScreenshotUrl } from '@/lib/works';
+import Directory, { type DirItem, type GalleryWork } from './directory';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +13,6 @@ export default async function Home() {
       'id,display_name,avatar_url,city,country,niche,sphere,bio,goal,status,telegram_username,import_key,updated_at',
     )
     .eq('is_published', true)
-    .order('updated_at', { ascending: false })
     .limit(500);
 
   if (error) console.error('students query failed:', error.message);
@@ -22,7 +22,8 @@ export default async function Home() {
   const { data: worksData, error: worksError } = await supabase
     .from(tbl('works'))
     .select('id, student_id, title, live_url, repo_url, screenshot_path, screenshot_failed, stack, description, tags, posted_at, is_published, updated_at, media')
-    .eq('is_published', true);
+    .eq('is_published', true)
+    .order('posted_at', { ascending: false });
 
   if (worksError) console.error('works query failed:', worksError.message);
 
@@ -53,6 +54,28 @@ export default async function Home() {
     workCount: worksByStudent.get(s.id)?.length ?? 0,
   }));
 
+  const studentById = new Map(list.map((s) => [s.id, s]));
+  const gallery: GalleryWork[] = ((worksData ?? []) as WorkRow[]).flatMap((w) => {
+    const author = studentById.get(w.student_id);
+    // Работа без опубликованного автора на витрине не показывается: карточка
+    // без имени не даёт того, ради чего витрина сделана, — контакта.
+    if (!author) return [];
+    return [
+      {
+        id: w.id,
+        title: w.title,
+        description: w.description,
+        liveUrl: w.live_url,
+        repoUrl: w.repo_url,
+        screenshotUrl: workScreenshotUrl(w),
+        stack: w.stack ?? [],
+        authorId: author.id,
+        authorName: author.display_name,
+        authorSlug: studentSlug(author),
+      },
+    ];
+  });
+
   let recommendations: { item: DirItem; reason: string | null }[] = [];
   if (myId) {
     const { data: recsData } = await serviceClient()
@@ -70,5 +93,5 @@ export default async function Home() {
       .filter((x): x is { item: DirItem; reason: string | null } => x !== null);
   }
 
-  return <Directory items={items} myId={myId} recommendations={recommendations} />;
+  return <Directory items={items} works={gallery} myId={myId} recommendations={recommendations} />;
 }

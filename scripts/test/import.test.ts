@@ -188,35 +188,40 @@ describe('mergeStudentFields', () => {
     niche: 'стройматериалы',
     bio: 'из импорта',
   };
-  const postedAt = '2026-06-28T10:00:00Z';
 
   it('заполняет поля, если ученик профиль не трогал', () => {
-    const existing = { updated_at: '2026-06-28T10:00:30Z', bio: null };
-    const merged = mergeStudentFields(payload, existing, postedAt);
+    const merged = mergeStudentFields(payload, { self_edited_at: null, bio: null });
     expect(merged.bio).toBe('из импорта');
     expect(merged.city).toBe('Южно-Сахалинск');
   });
 
-  it('не перетирает профиль, отредактированный вручную позже поста', () => {
-    const existing = { updated_at: '2026-07-15T12:00:00Z', bio: 'написал сам' };
-    const merged = mergeStudentFields(payload, existing, postedAt);
+  it('не трогает профиль, который ученик редактировал сам', () => {
+    const merged = mergeStudentFields(payload, {
+      self_edited_at: '2026-07-15T12:00:00Z',
+      bio: 'написал сам',
+    });
     expect(merged).toEqual({});
   });
 
-  it('порог ровно 60 секунд не считается ручной правкой', () => {
-    const existing = { updated_at: '2026-06-28T10:01:00Z', bio: null };
-    const merged = mergeStudentFields(payload, existing, postedAt);
+  it('повторный импорт заполняет профиль дальше — свежий updated_at правкой не считается', () => {
+    const merged = mergeStudentFields(payload, {
+      self_edited_at: null,
+      updated_at: '2026-07-31T23:00:00Z',
+      bio: null,
+    });
     expect(merged.bio).toBe('из импорта');
   });
 
   it('нового ученика заполняет целиком', () => {
-    const merged = mergeStudentFields(payload, null, postedAt);
+    const merged = mergeStudentFields(payload, null);
     expect(merged.display_name).toBe('Денис Колесников');
   });
 
   it('не затирает заполненное поле пустым значением из импорта', () => {
-    const existing = { updated_at: '2026-06-28T10:00:10Z', bio: 'уже было' };
-    const merged = mergeStudentFields({ ...payload, bio: null }, existing, postedAt);
+    const merged = mergeStudentFields({ ...payload, bio: null }, {
+      self_edited_at: null,
+      bio: 'уже было',
+    });
     expect(merged.bio).toBeUndefined();
   });
 });
