@@ -44,6 +44,7 @@ describe('buildWorkPrompt', () => {
       {
         rootMessageId: 200,
         authorName: 'Dmitry',
+        authorId: 555,
         postedAt: '2026-06-29T09:00:00Z',
         text: 'Мой проект https://hard-iron.ru готов',
         media: [],

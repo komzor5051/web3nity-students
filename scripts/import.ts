@@ -23,6 +23,8 @@ import {
   groupConsecutive,
   isLongPost,
   normalizeAuthorKey,
+  ambiguousAuthorNames,
+  authorKeyOf,
   classifyByTopic,
   cohortOf,
   extractUrls,
@@ -113,12 +115,14 @@ export function buildStudentPayload(input: {
   authorUsername: string | null;
   rootMessageId: number;
   intro: IntroFields;
+  /** Ключ профиля. По умолчанию — имя; у тёзок разведён по telegram user id. */
+  importKey?: string;
 }): StudentPayload {
-  const { chatId, authorName, authorUsername, rootMessageId, intro } = input;
+  const { chatId, authorName, authorUsername, rootMessageId, intro, importKey } = input;
   return {
     display_name: intro.name?.trim() || authorName.trim(),
     cohort: cohortOf(chatId),
-    import_key: normalizeAuthorKey(authorName),
+    import_key: importKey ?? normalizeAuthorKey(authorName),
     telegram_username: authorUsername,
     source_message_id: `tg:${chatId}:${rootMessageId}`,
     city: intro.city ?? null,
@@ -132,6 +136,33 @@ export function buildStudentPayload(input: {
     status: intro.status ?? null,
     is_published: true,
   };
+}
+
+/**
+ * Чей это VIP-топик. Ветка названа именем ученика, но пишут в неё и куратор,
+ * и бывают тёзки — поэтому владельцем считаем самого активного автора,
+ * пишущего под именем ветки. null, если под этим именем в ветке никто не писал.
+ */
+export function resolveTopicOwnerId(
+  messages: ParsedMessage[],
+  topicTitleName: string,
+): number | null {
+  const wanted = normalizeAuthorKey(topicTitleName);
+  const counts = new Map<number, number>();
+  for (const m of messages) {
+    if (m.authorId === null || !m.authorName) continue;
+    if (normalizeAuthorKey(m.authorName) !== wanted) continue;
+    counts.set(m.authorId, (counts.get(m.authorId) ?? 0) + 1);
+  }
+  let best: number | null = null;
+  let bestCount = 0;
+  for (const [id, count] of counts) {
+    if (count > bestCount) {
+      best = id;
+      bestCount = count;
+    }
+  }
+  return best;
 }
 
 /** Откуда пришла работа — определяет, публикуется она или остаётся черновиком. */
@@ -292,6 +323,10 @@ async function run(args: Args): Promise<{ failures: FailureContext[] }> {
       }
     }
 
+    // Тёзки: под одним именем в чате могут писать разные люди. Разводим их
+    // ключи по telegram user id — иначе получится один профиль на двоих.
+    const ambiguous = ambiguousAuthorNames(parsed);
+
     // Представления. Короткие реплики («Ок», «Спасибо») отсекаем ДО отправки
     // в Gemini — они не могут быть представлением, и это экономит запросы.
     const introPosts = groupConsecutive(byKind.get('intro') ?? []).filter((p) => isLongPost(p));
@@ -309,6 +344,7 @@ async function run(args: Args): Promise<{ failures: FailureContext[] }> {
           authorUsername: usernames.get(post.authorName) ?? null,
           rootMessageId: post.rootMessageId,
           intro,
+          importKey: authorKeyOf(post.authorName, post.authorId, ambiguous),
         }),
         postedAt: post.postedAt,
       });
@@ -324,7 +360,7 @@ async function run(args: Args): Promise<{ failures: FailureContext[] }> {
       if (!fields) continue;
       const payload = buildWorkPayload({
         chatId: chat.chatId,
-        importKey: normalizeAuthorKey(post.authorName),
+        importKey: authorKeyOf(post.authorName, post.authorId, ambiguous),
         rootMessageId: post.rootMessageId,
         postedAt: post.postedAt,
         text: post.text,
@@ -349,6 +385,10 @@ async function run(args: Args): Promise<{ failures: FailureContext[] }> {
       const studentName = topicTitle(chat, topicId);
       if (!studentName) continue;
 
+      // Кто в этой ветке ученик: тот, кто пишет в ней под именем ветки.
+      // Остальные (куратор, тёзка из другой ветки) в работы не попадают.
+      const ownerId = resolveTopicOwnerId(messages, studentName);
+
       students.push({
         payload: buildStudentPayload({
           chatId: chat.chatId,
@@ -356,11 +396,14 @@ async function run(args: Args): Promise<{ failures: FailureContext[] }> {
           authorUsername: usernames.get(studentName) ?? null,
           rootMessageId: topicId,
           intro: {},
+          importKey: authorKeyOf(studentName, ownerId, ambiguous),
         }),
         postedAt: null,
       });
 
-      const own = messages.filter((m) => m.authorName === studentName);
+      const own = messages.filter((m) =>
+        ownerId !== null ? m.authorId === ownerId : m.authorName === studentName,
+      );
       const ownPosts = groupConsecutive(own).filter((p) => isLongPost(p));
       const { results: ownWorks, failedBatches: ownFailures } = await extractWorks(ownPosts);
       for (const f of ownFailures) failures.push({ ...f, chatId: chat.chatId, kind: 'work' });
@@ -369,7 +412,7 @@ async function run(args: Args): Promise<{ failures: FailureContext[] }> {
         if (!fields) continue;
         const payload = buildWorkPayload({
           chatId: chat.chatId,
-          importKey: normalizeAuthorKey(studentName),
+          importKey: authorKeyOf(studentName, ownerId, ambiguous),
           rootMessageId: post.rootMessageId,
           postedAt: post.postedAt,
           text: post.text,

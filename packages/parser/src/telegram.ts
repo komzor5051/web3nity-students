@@ -56,6 +56,7 @@ export function toParsedMessages(chat: ChatDump): ParsedMessage[] {
     messageId: m.message_id,
     threadId: m.topic_id,
     authorName: m.author_name,
+    authorId: m.author_id ?? null,
     postedAt: m.posted_at,
     text: m.text ?? '',
     // Медиа из Telegram не выкачиваем: работы показываются скриншотами

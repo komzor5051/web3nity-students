@@ -5,8 +5,52 @@ import {
   mergeStudentFields,
   normalizeLiveUrl,
   dedupeWorksByLiveUrl,
+  resolveTopicOwnerId,
   type WorkPayload,
 } from '../import.js';
+import type { ParsedMessage } from '@vibe/parser';
+
+function vipMsg(messageId: number, authorName: string, authorId: number | null): ParsedMessage {
+  return {
+    messageId,
+    threadId: 45,
+    authorName,
+    authorId,
+    postedAt: '2026-06-28T10:00:00Z',
+    text: 'сообщение в ветке',
+    media: [],
+    replyToId: null,
+    isService: false,
+    joined: false,
+  };
+}
+
+describe('resolveTopicOwnerId', () => {
+  it('владелец ветки — тот, кто пишет в ней под именем ветки, а не куратор', () => {
+    const owner = resolveTopicOwnerId(
+      [
+        vipMsg(1, 'Влад Лямин', 900),
+        vipMsg(2, 'Алекс', 42),
+        vipMsg(3, 'Влад Лямин', 900),
+        vipMsg(4, 'Алекс', 42),
+      ],
+      'Алекс',
+    );
+    expect(owner).toBe(42);
+  });
+
+  it('из двух тёзок в ветке выбирает того, кто в ней активнее', () => {
+    const owner = resolveTopicOwnerId(
+      [vipMsg(1, 'Алекс', 42), vipMsg(2, 'алекс', 77), vipMsg(3, 'Алекс', 42)],
+      'Алекс',
+    );
+    expect(owner).toBe(42);
+  });
+
+  it('под именем ветки никто не писал — владельца нет', () => {
+    expect(resolveTopicOwnerId([vipMsg(1, 'Влад Лямин', 900)], 'Алекс')).toBeNull();
+  });
+});
 
 /** Минимальный валидный WorkPayload для тестов дедупликации — поля, не участвующие в сравнении, произвольные. */
 function work(overrides: Partial<WorkPayload> & { cohort: string; import_key: string }): WorkPayload {

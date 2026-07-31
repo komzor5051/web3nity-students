@@ -4,6 +4,8 @@ export interface GroupedPost {
   /** Первый message id в группе — natural key. */
   rootMessageId: number;
   authorName: string;
+  /** Telegram user id автора, если дамп его знает. */
+  authorId: number | null;
   postedAt: string | null;
   /** Текст всех сообщений группы, склеенный через \n\n. */
   text: string;
@@ -33,7 +35,12 @@ export function groupConsecutive(messages: ParsedMessage[]): GroupedPost[] {
       continue;
     }
 
-    const sameAuthor = current && current.authorName === m.authorName;
+    // Одного имени мало: в чате бывают тёзки, и их подряд идущие сообщения
+    // склеились бы в один пост. Если id известны у обоих — решают они.
+    const sameAuthor =
+      current !== null &&
+      current.authorName === m.authorName &&
+      (current.authorId === null || m.authorId === null || current.authorId === m.authorId);
     const closeInTime = current && withinGap(current.postedAt, m.postedAt);
 
     if (current && sameAuthor && (m.joined || closeInTime)) {
@@ -49,6 +56,7 @@ export function groupConsecutive(messages: ParsedMessage[]): GroupedPost[] {
     current = {
       rootMessageId: m.messageId,
       authorName: m.authorName,
+      authorId: m.authorId,
       postedAt: m.postedAt,
       text: m.text,
       media: [...m.media],
@@ -79,4 +87,37 @@ export function normalizeAuthorKey(name: string): string {
     .toLowerCase()
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * Имена, под которыми в чате пишут разные люди.
+ *
+ * В дампе курса такое имя есть («alex» — два разных user id). Без разведения
+ * их профили и работы слились бы в один.
+ */
+export function ambiguousAuthorNames(messages: ParsedMessage[]): Set<string> {
+  const idsByKey = new Map<string, Set<number>>();
+  for (const m of messages) {
+    if (!m.authorName || m.authorId === null) continue;
+    const key = normalizeAuthorKey(m.authorName);
+    const ids = idsByKey.get(key) ?? new Set<number>();
+    ids.add(m.authorId);
+    idsByKey.set(key, ids);
+  }
+  return new Set([...idsByKey].filter(([, ids]) => ids.size > 1).map(([key]) => key));
+}
+
+/**
+ * import_key ученика. Обычно это нормализованное имя — оно же связывает
+ * импортированный профиль с входом через бота. Тёзкам добавляем user id,
+ * иначе они схлопнутся в один профиль.
+ */
+export function authorKeyOf(
+  name: string,
+  authorId: number | null,
+  ambiguous: Set<string>,
+): string {
+  const key = normalizeAuthorKey(name);
+  if (authorId !== null && ambiguous.has(key)) return `${key}#${authorId}`;
+  return key;
 }

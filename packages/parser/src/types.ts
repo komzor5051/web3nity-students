@@ -19,6 +19,11 @@ export interface ParsedMessage {
   threadId: number | null;
   /** Display name автора. HTML не даёт telegram_user_id. */
   authorName: string | null;
+  /**
+   * Telegram user id автора. Живой дамп его отдаёт, HTML-выгрузка — нет.
+   * Нужен там, где под одним display name пишут разные люди.
+   */
+  authorId: number | null;
   /** ISO timestamp из title="DD.MM.YYYY HH:MM:SS UTC±NN:NN". */
   postedAt: string | null;
   /** Текст с сохранёнными переводами строк (br → \n). */

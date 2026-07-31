@@ -139,9 +139,17 @@ create policy vibe_students_anon_read on vibe_students
   using (is_published = true);
 
 drop policy if exists vibe_works_anon_read on vibe_works;
+-- Работа читается анонимом, только если опубликована и она сама, и её автор:
+-- иначе скрытый профиль продолжал бы светить своими карточками.
 create policy vibe_works_anon_read on vibe_works
   for select to anon
-  using (is_published = true);
+  using (
+    is_published = true
+    and exists (
+      select 1 from vibe_students s
+      where s.id = vibe_works.student_id and s.is_published = true
+    )
+  );
 
 drop policy if exists vibe_tags_anon_read on vibe_tags;
 create policy vibe_tags_anon_read on vibe_tags
