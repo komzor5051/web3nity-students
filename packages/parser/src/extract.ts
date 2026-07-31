@@ -12,6 +12,7 @@ import {
   GoogleGenerativeAI,
   SchemaType,
   type GenerateContentResult,
+  type GenerationConfig,
   type GenerativeModel,
   type Schema,
 } from '@google/generative-ai';
@@ -265,7 +266,13 @@ function makeModel(prompt: string, schema: Schema, config: LLMConfig): Generativ
         responseMimeType: 'application/json',
         responseSchema: schema,
         temperature: 0.2,
-      },
+        // У 2.5-flash «размышление» включено по умолчанию и стоит дорого:
+        // на пустяковый запрос модель тратит больше тысячи thought-токенов,
+        // а батч из восьми длинных постов не укладывался и в 180 секунд.
+        // Достаём из поста готовые поля — рассуждать тут не над чем.
+        // Поле есть в REST API, но не в типах старого SDK — отсюда каст.
+        thinkingConfig: { thinkingBudget: 0 },
+      } as GenerationConfig,
     },
     baseUrl ? { baseUrl } : undefined,
   );

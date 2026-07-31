@@ -143,6 +143,14 @@ export function buildStudentPayload(input: {
  * и бывают тёзки — поэтому владельцем считаем самого активного автора,
  * пишущего под именем ветки. null, если под этим именем в ветке никто не писал.
  */
+/**
+ * Прогресс разбора. Без него прогон молчит десятки минут, и отличить работу
+ * от зависания можно только по открытым сокетам процесса — так и было.
+ */
+function progress(label: string): (done: number, total: number) => void {
+  return (done, total) => console.log(`[extract] ${label}: ${done}/${total}`);
+}
+
 export function resolveTopicOwnerId(
   messages: ParsedMessage[],
   topicTitleName: string,
@@ -330,7 +338,9 @@ async function run(args: Args): Promise<{ failures: FailureContext[] }> {
     // Представления. Короткие реплики («Ок», «Спасибо») отсекаем ДО отправки
     // в Gemini — они не могут быть представлением, и это экономит запросы.
     const introPosts = groupConsecutive(byKind.get('intro') ?? []).filter((p) => isLongPost(p));
-    const { results: intros, failedBatches: introFailures } = await extractIntros(introPosts);
+    const { results: intros, failedBatches: introFailures } = await extractIntros(introPosts, {
+      onBatch: progress(`представления ${chat.title}`),
+    });
     for (const f of introFailures) failures.push({ ...f, chatId: chat.chatId, kind: 'intro' });
     for (const post of introPosts) {
       const intro = intros.get(post.rootMessageId);
@@ -353,7 +363,9 @@ async function run(args: Args): Promise<{ failures: FailureContext[] }> {
     // Работы из общей ветки. Тот же фильтр длины: реплика в три слова не
     // может быть анонсом работы.
     const workPosts = groupConsecutive(byKind.get('work') ?? []).filter((p) => isLongPost(p));
-    const { results: extracted, failedBatches: workFailures } = await extractWorks(workPosts);
+    const { results: extracted, failedBatches: workFailures } = await extractWorks(workPosts, {
+      onBatch: progress(`работы ${chat.title}`),
+    });
     for (const f of workFailures) failures.push({ ...f, chatId: chat.chatId, kind: 'work' });
     for (const post of workPosts) {
       const fields = extracted.get(post.rootMessageId);
@@ -405,7 +417,9 @@ async function run(args: Args): Promise<{ failures: FailureContext[] }> {
         ownerId !== null ? m.authorId === ownerId : m.authorName === studentName,
       );
       const ownPosts = groupConsecutive(own).filter((p) => isLongPost(p));
-      const { results: ownWorks, failedBatches: ownFailures } = await extractWorks(ownPosts);
+      const { results: ownWorks, failedBatches: ownFailures } = await extractWorks(ownPosts, {
+        onBatch: progress(`VIP ${studentName}`),
+      });
       for (const f of ownFailures) failures.push({ ...f, chatId: chat.chatId, kind: 'work' });
       for (const post of ownPosts) {
         const fields = ownWorks.get(post.rootMessageId);
