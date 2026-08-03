@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './env.js';
 import { Telegraf, Markup } from 'telegraf';
 import { getServiceClient, tbl } from '@vibe/db';
 import { getOrAttachStudent } from './students.js';
@@ -24,6 +24,20 @@ const claimUrl = (token: string): string =>
 
 const bot = new Telegraf(TOKEN);
 const db = getServiceClient();
+
+// Ошибка обработчика без catch реджектит launch() и роняет процесс молча —
+// пользователь остаётся без ответа, а бот уходит в перезапуск. Логируем
+// и отвечаем честным сообщением; JSON.stringify — потому что Supabase кидает
+// plain-object, который в шаблоне превращается в «[object Object]».
+bot.catch(async (err, ctx) => {
+  const detail = err instanceof Error ? err.stack : JSON.stringify(err);
+  console.error(`[bot] handler error on update ${ctx.update.update_id}: ${detail}`);
+  try {
+    await ctx.reply('Что-то пошло не так. Попробуйте ещё раз через минуту.');
+  } catch {
+    // чат недоступен — просто не отвечаем
+  }
+});
 
 // Группы/каналы игнорируем целиком — бот работает только в личке и только на вход.
 bot.use(async (ctx, next) => {
