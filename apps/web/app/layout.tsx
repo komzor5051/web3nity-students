@@ -5,18 +5,18 @@ import { getCurrentStudent } from '@/lib/auth';
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://vibecoding-students.vercel.app'),
-  title: 'Сделано учениками — курс по вайб-кодингу',
-  description: 'Живая витрина сайтов, сервисов и ботов, запущенных учениками курса по вайб-кодингу.',
+  title: 'Ученики Web3nity — люди, связи и проекты',
+  description: 'Платформа учеников Web3nity: знакомьтесь, находите партнёров и клиентов, показывайте запущенные проекты.',
   openGraph: {
-    title: 'Сделано учениками — курс по вайб-кодингу',
-    description: 'Живая витрина сайтов, сервисов и ботов, запущенных учениками курса.',
+    title: 'Ученики Web3nity — люди, связи и проекты',
+    description: 'Платформа учеников Web3nity: знакомьтесь, находите партнёров и клиентов, показывайте запущенные проекты.',
     type: 'website',
-    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'Сделано учениками. Уже работает.' }],
+    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'Ученики Web3nity. Люди, связи и проекты.' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Сделано учениками — курс по вайб-кодингу',
-    description: 'Живая витрина сайтов, сервисов и ботов, запущенных учениками курса.',
+    title: 'Ученики Web3nity — люди, связи и проекты',
+    description: 'Платформа учеников Web3nity: знакомьтесь, находите партнёров и клиентов, показывайте запущенные проекты.',
     images: ['/og.png'],
   },
 };
@@ -39,15 +39,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <div className="w-full max-w-[1320px] mx-auto flex items-center justify-between gap-6">
             <Link
               href="/"
-              aria-label="На главную — ученики курса по вайб-кодингу"
+              aria-label="На главную — платформа учеников Web3nity"
               className="flex items-center gap-3 font-bold select-none touch-manipulation group"
             >
-              <span className="w-8 h-8 bg-accent rounded-sm shrink-0 grid place-items-center text-ink font-display text-[11px] group-hover:rotate-6">V</span>
-              <span className="whitespace-nowrap font-display text-[11px] sm:text-[12px] tracking-[-.02em]">ВАЙБ-КОДИНГ</span>
+              <span className="w-8 h-8 bg-accent rounded-sm shrink-0 grid place-items-center text-ink font-display text-[11px] group-hover:rotate-6">W</span>
+              <span className="whitespace-nowrap font-display text-[11px] sm:text-[12px] tracking-[-.02em]">WEB3NITY</span>
             </Link>
             <nav aria-label="Основная навигация" className="hidden md:flex items-center gap-8 ml-auto mr-4 font-mono text-[11px] uppercase tracking-[.08em] text-white/60">
-              <a href="/#works" className="hover:text-white">Работы</a>
               <a href="/#people" className="hover:text-white">Участники</a>
+              <a href="/#works" className="hover:text-white">Работы</a>
             </nav>
             <div className="flex items-center gap-3 text-[13px] text-white/70">
             {me ? (
@@ -80,8 +80,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <footer className="bg-ink text-white border-t border-white/10 px-5 sm:px-10 py-10">
           <div className="max-w-[1320px] mx-auto flex flex-col sm:flex-row sm:items-end justify-between gap-8">
             <div>
-              <div className="font-display text-[12px] tracking-[-.02em]">ВАЙБ-КОДИНГ</div>
-              <p className="mt-3 text-[13px] text-white/50 max-w-sm">Живая витрина людей, которые учатся через практику и публикуют результат.</p>
+              <div className="font-display text-[12px] tracking-[-.02em]">WEB3NITY</div>
+              <p className="mt-3 text-[13px] text-white/50 max-w-sm">Платформа учеников Web3nity: люди, связи и запущенные проекты.</p>
             </div>
             <div className="font-mono text-[10px] uppercase tracking-[.1em] text-white/40">Сделано учениками · обновляется по мере запусков</div>
           </div>

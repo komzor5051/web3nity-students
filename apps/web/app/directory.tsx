@@ -93,11 +93,6 @@ function fullness(i: DirItem): number {
   return i.workCount * 100 + (i.bio ? 10 : 0) + (i.city || i.country ? 3 : 0) + (i.sphere ? 2 : 0);
 }
 
-/** У профиля есть что показать в карточке, кроме имени. */
-function hasContent(i: DirItem): boolean {
-  return i.workCount > 0 || Boolean(i.bio);
-}
-
 export default function Directory({
   items,
   works,
@@ -219,12 +214,6 @@ export default function Directory({
     [items, status, sphere, region, term, onlyWithWorks],
   );
 
-  // Профили без работ и без рассказа о себе — отдельным компактным списком.
-  // Карточка из одного имени и прочерков занимает столько же места, сколько
-  // содержательная, и первый экран превращается в стену пустых плашек.
-  const rich = filtered.filter(hasContent);
-  const plain = filtered.filter((i) => !hasContent(i));
-
   // Статусов в импортированных данных нет — показывать фильтр, у которого
   // единственное непустое значение «Без статуса», незачем.
   const showStatusFilter = statusCounts.all > statusCounts.none;
@@ -240,16 +229,19 @@ export default function Directory({
         <div className="relative max-w-[1320px] mx-auto px-5 sm:px-10 py-16 sm:py-24 lg:py-28">
           <div className="grid lg:grid-cols-[minmax(0,1fr)_360px] gap-14 lg:gap-20 items-end">
             <div>
-              <p className="font-mono text-[10px] sm:text-[11px] uppercase tracking-[.14em] text-accent mb-6">От идеи до первой ссылки</p>
+              <p className="font-mono text-[10px] sm:text-[11px] uppercase tracking-[.14em] text-accent mb-6">Платформа учеников Web3nity</p>
               <h1 className="font-display max-w-[880px] text-[36px] sm:text-[56px] lg:text-[72px] leading-[.98] tracking-[-.055em] text-balance">
-                Сделано учениками. Уже работает.
+                Люди, связи и запущенные проекты.
               </h1>
               <p className="max-w-[650px] text-white/60 text-[15px] sm:text-[17px] leading-relaxed mt-7 text-pretty">
-                Живая витрина проектов курса по вайб-кодингу. Открывайте сайты, находите людей из своей сферы и пишите авторам напрямую.
+                Здесь ученики Web3nity знакомятся, находят партнёров и клиентов и показывают, что уже запустили. Откройте профиль — и пишите человеку напрямую в Telegram.
               </p>
               <div className="flex flex-wrap gap-3 mt-8">
-                <a href="#works" className="inline-flex items-center gap-3 rounded-sm bg-accent text-ink px-5 py-3 text-[13px] font-extrabold hover:bg-white">
-                  Смотреть проекты <span aria-hidden="true">↓</span>
+                <a href="#people" className="inline-flex items-center gap-3 rounded-sm bg-accent text-ink px-5 py-3 text-[13px] font-extrabold hover:bg-white">
+                  Найти людей <span aria-hidden="true">↓</span>
+                </a>
+                <a href="#works" className="inline-flex items-center gap-3 rounded-sm border border-white/20 px-5 py-3 text-[13px] font-semibold hover:border-white hover:bg-white/5">
+                  Проекты · {stats.works}
                 </a>
                 {recommendations.length > 0 && (
                   <button type="button" onClick={() => setRecsOpen(true)} className="rounded-sm border border-white/20 px-5 py-3 text-[13px] font-semibold hover:border-white hover:bg-white/5">
@@ -268,29 +260,8 @@ export default function Directory({
       </section>
 
       <div className="max-w-[1320px] mx-auto px-5 sm:px-10 py-16 sm:py-24 overflow-x-clip">
-        {works.length > 0 && (
-          <section id="works" className="scroll-mt-28">
-            <SectionHead title="Проекты, которые уже можно открыть" note={`${works.length} запусков`} />
-            <ul className="work-showcase-grid">
-              {visibleWorks.map((w, idx) => (
-                <li key={w.id}>
-                  <WorkTile work={w} index={idx} />
-                </li>
-              ))}
-            </ul>
-            {works.length > 6 && (
-              <div className="mt-10 flex items-center gap-5">
-                <button type="button" onClick={() => setShowAllWorks((value) => !value)} className="rounded-sm border border-ink px-5 py-3 text-[12px] font-bold hover:bg-ink hover:text-white">
-                  {showAllWorks ? 'Показать главное' : `Показать все ${works.length}`}
-                </button>
-                <span className="hidden sm:block h-px flex-1 bg-line" />
-              </div>
-            )}
-          </section>
-        )}
-
-        <section id="people" className="mt-24 sm:mt-32 scroll-mt-28">
-          <SectionHead title="Кто за этим стоит" note={`${filtered.length} из ${items.length}`} />
+        <section id="people" className="scroll-mt-28">
+          <SectionHead title="База учеников" note={`${filtered.length} из ${items.length}`} />
           <div className="grid lg:grid-cols-[290px_minmax(0,1fr)] gap-10 lg:gap-12 items-start">
             <aside className="lg:sticky lg:top-[94px] rounded-lg bg-surface p-5 sm:p-6 border border-line">
               <div className="flex items-baseline justify-between mb-5">
@@ -339,29 +310,38 @@ export default function Directory({
                   <p className="text-[13px] text-text2">Сбросьте один из фильтров или попробуйте другой запрос.</p>
                 </div>
               ) : (
-                <>
-                  {rich.length > 0 && (
-                    <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {rich.map((s, idx) => (
-                        <li key={s.id}>
-                          <Card item={s} index={idx} isMe={!!myId && s.id === myId} onOpen={() => setOpenId(s.id)} />
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {plain.length > 0 && (
-                    <div className={rich.length > 0 ? 'mt-12' : ''}>
-                      <h3 className="font-mono text-[10px] uppercase tracking-[.1em] text-text3 mb-3">Ещё {plain.length} {plural(plain.length, 'участник', 'участника', 'участников')} заполняют профиль</h3>
-                      <ul className="border-t border-line">
-                        {plain.map((s) => <PlainRow key={s.id} item={s} isMe={!!myId && s.id === myId} onOpen={() => setOpenId(s.id)} />)}
-                      </ul>
-                    </div>
-                  )}
-                </>
+                <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filtered.map((s, idx) => (
+                    <li key={s.id}>
+                      <Card item={s} index={idx} isMe={!!myId && s.id === myId} onOpen={() => setOpenId(s.id)} />
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           </div>
         </section>
+
+        {works.length > 0 && (
+          <section id="works" className="mt-24 sm:mt-32 scroll-mt-28">
+            <SectionHead title="Проекты, которые уже можно открыть" note={`${works.length} запусков`} />
+            <ul className="work-showcase-grid">
+              {visibleWorks.map((w, idx) => (
+                <li key={w.id}>
+                  <WorkTile work={w} index={idx} />
+                </li>
+              ))}
+            </ul>
+            {works.length > 6 && (
+              <div className="mt-10 flex items-center gap-5">
+                <button type="button" onClick={() => setShowAllWorks((value) => !value)} className="rounded-sm border border-ink px-5 py-3 text-[12px] font-bold hover:bg-ink hover:text-white">
+                  {showAllWorks ? 'Показать главное' : `Показать все ${works.length}`}
+                </button>
+                <span className="hidden sm:block h-px flex-1 bg-line" />
+              </div>
+            )}
+          </section>
+        )}
       </div>
 
       {opened && <Modal item={opened} onClose={() => setOpenId(null)} />}
@@ -608,38 +588,6 @@ function Card({
         ) : <span className="px-4 py-3.5 text-[11px] text-text3 text-right border-l border-line">без контакта</span>}
       </div>
     </article>
-  );
-}
-
-/** Строка для профиля, у которого пока нет ни работ, ни рассказа о себе. */
-function PlainRow({ item, isMe, onOpen }: { item: DirItem; isMe: boolean; onOpen: () => void }) {
-  return (
-    <li className="border-b border-line hover:bg-surface/50">
-      <div className="flex items-center gap-3 py-3 px-1">
-        <button onClick={onOpen} className="flex items-center gap-3 min-w-0 flex-1 text-left group">
-          <Avatar item={item} size={32} />
-          <span className="text-[13px] truncate">
-            {item.name}
-            {isMe && <span className="ml-2 text-[11px] text-accent">это вы</span>}
-          </span>
-          {(item.city || item.country) && (
-            <span className="text-[12px] text-text3 truncate hidden sm:inline">
-              {[item.city, item.country].filter(Boolean).join(', ')}
-            </span>
-          )}
-        </button>
-        {item.telegram ? (
-          <a
-            href={`https://t.me/${item.telegram}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-mono text-[12px] text-text3 hover:text-accent shrink-0"
-          >
-            @{item.telegram}
-          </a>
-        ) : null}
-      </div>
-    </li>
   );
 }
 

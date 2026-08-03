@@ -20,12 +20,28 @@ const NOT_A_WORK_HOSTS = [
   'youtube.com',
   'youtu.be',
   'vk.com',
+  'vk.ru',
+  'ok.ru',
+  // Редактор/превью Lovable: ссылки живут недолго и требуют логина —
+  // работой считается только опубликованный *.lovable.app.
+  'lovable.dev',
   'ai-education.kwiga.com',
   'kwiga.com',
   'zoom.us',
   'docs.google.com',
   'drive.google.com',
 ];
+
+/**
+ * Ссылка не является работой, даже если хост не в стоп-листе:
+ * id-preview--*.lovable.app — временные превью редактора.
+ */
+export function isNotAWorkUrl(url: string): boolean {
+  const host = hostOf(url);
+  if (!host) return true;
+  if (host.startsWith('id-preview--')) return true;
+  return NOT_A_WORK_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+}
 
 /** Убирает знаки препинания, прилипшие к концу ссылки в живом тексте. */
 function trimTrailing(url: string): string {
@@ -65,7 +81,7 @@ export function extractUrls(text: string): ExtractedUrls {
       repoUrl ??= url;
       continue;
     }
-    if (NOT_A_WORK_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))) continue;
+    if (isNotAWorkUrl(url)) continue;
     liveUrl ??= url;
   }
 
