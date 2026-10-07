@@ -11,9 +11,13 @@ const STATUSES = ['looking_for_clients', 'looking_for_partners', 'just_learning'
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
+// Потолок длины любого текстового поля: рассказ на 100 КБ ломает карточки и
+// OG-картинки, а лимит в форме обходится прямым запросом к server action.
+const MAX_TEXT = 4000;
+
 function text(form: FormData, key: string): string | null {
   const v = form.get(key);
-  return typeof v === 'string' && v.trim() ? v.trim() : null;
+  return typeof v === 'string' && v.trim() ? v.trim().slice(0, MAX_TEXT) : null;
 }
 
 /** Сохранить поля профиля. */

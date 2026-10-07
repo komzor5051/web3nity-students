@@ -17,6 +17,9 @@ module.exports = {
         'accent-dark': '#C83B1F',
         'tag-bg': '#E7E0D4',
         'tag-text': '#4A443A',
+        green: '#2D8F5E',
+        purple: '#7C3AED',
+        blue: '#2A6BE8',
       },
       fontFamily: {
         sans: ['Manrope', 'system-ui', 'sans-serif'],

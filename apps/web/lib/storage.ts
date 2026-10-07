@@ -24,6 +24,18 @@ export type MediaItem = {
 
 const IMAGE_EXT = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
 const VIDEO_EXT = ['mp4', 'mov', 'webm'];
+const MEDIA_EXT = [...IMAGE_EXT, ...VIDEO_EXT, 'pdf'];
+const MIME_BY_EXT: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  mp4: 'video/mp4',
+  mov: 'video/quicktime',
+  webm: 'video/webm',
+  pdf: 'application/pdf',
+};
 
 function mediaType(ext: string): MediaItem['type'] {
   if (VIDEO_EXT.includes(ext)) return 'video';
@@ -53,12 +65,15 @@ export async function uploadWorkMedia(
   if (file.size === 0 || file.size > MAX_BYTES) return null;
 
   const ext = (file.name.split('.').pop() ?? '').toLowerCase();
+  // Бакет публичный: .html или .svg отсюда открылись бы на домене Supabase как
+  // страница. Принимаем только то, что витрина умеет показать.
+  if (!MEDIA_EXT.includes(ext)) return null;
   const key = safeKey(studentId, file.name);
   const buffer = Buffer.from(await file.arrayBuffer());
 
   const svc = serviceClient();
   const { error } = await svc.storage.from(BUCKET).upload(key, buffer, {
-    contentType: file.type || 'application/octet-stream',
+    contentType: MIME_BY_EXT[ext],
     upsert: true,
   });
   if (error) {

@@ -18,8 +18,8 @@ export function Avatar({ name, url, size = 56 }: { name: string; url: string | n
     .split(' ')
     .filter(Boolean)
     .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? '')
-    .join('');
+    .map((p) => p.match(/[\p{L}\p{N}]/u)?.[0]?.toUpperCase() ?? '')
+    .join('') || '?';
   return (
     <div
       className="rounded-[24px] border border-line bg-accent-light flex items-center justify-center font-display font-bold text-accent-dark"

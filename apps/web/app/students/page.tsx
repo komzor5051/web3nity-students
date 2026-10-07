@@ -1,6 +1,7 @@
 import { supabase, studentSlug, tbl, type StudentRow } from '@/lib/db';
 import { getCurrentStudent, serviceClient } from '@/lib/auth';
 import { resolveRegion } from '@/lib/region';
+import { canonicalSphere, cleanBio, tgHandle } from '@/lib/text';
 import Directory, { type DirItem } from './directory';
 
 export const dynamic = 'force-dynamic';
@@ -29,11 +30,11 @@ export default async function StudentsPage() {
     country: s.country,
     region: resolveRegion(s.city, s.country),
     niche: s.niche,
-    sphere: s.sphere,
-    bio: s.bio,
-    goal: s.goal,
+    sphere: canonicalSphere(s.sphere),
+    bio: cleanBio(s.bio),
+    goal: cleanBio(s.goal),
     status: s.status,
-    telegram: s.telegram_username,
+    telegram: tgHandle(s.telegram_username),
     avatarColor: avatarColor(s.id),
     avatarUrl: s.avatar_url,
   }));

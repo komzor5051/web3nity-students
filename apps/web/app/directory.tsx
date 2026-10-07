@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { REGION_OPTS } from '@/lib/region';
+import { initialOf, matchesTerms } from '@/lib/text';
 
 export type DirItem = {
   id: string;
@@ -165,7 +166,7 @@ export default function Directory({
     const hay = normalizeSearch(
       [i.name, i.niche, i.sphere, i.city, i.country, i.bio, i.telegram].filter(Boolean).join(' '),
     );
-    return hay.includes(term);
+    return matchesTerms(hay, term);
   };
   const okWorks = (i: DirItem) => !onlyWithWorks || i.workCount > 0;
 
@@ -175,36 +176,36 @@ export default function Directory({
   const statusCounts = useMemo(() => {
     const c: Record<StatusKey, number> = { all: 0, learning: 0, cofounder: 0, client: 0, none: 0 };
     for (const i of items) {
-      if (!okSphere(i) || !okRegion(i) || !okSearch(i)) continue;
+      if (!okSphere(i) || !okRegion(i) || !okSearch(i) || !okWorks(i)) continue;
       c.all++;
       c[statusKey(i.status) ?? 'none']++;
     }
     return c;
-  }, [items, sphere, region, term]);
+  }, [items, sphere, region, term, onlyWithWorks]);
 
   const sphereCounts = useMemo(() => {
     const c = new Map<string, number>();
     let all = 0;
     for (const i of items) {
-      if (!okStatus(i) || !okRegion(i) || !okSearch(i)) continue;
+      if (!okStatus(i) || !okRegion(i) || !okSearch(i) || !okWorks(i)) continue;
       all++;
       if (i.sphere) c.set(i.sphere, (c.get(i.sphere) ?? 0) + 1);
     }
     c.set('all', all);
     return c;
-  }, [items, status, region, term]);
+  }, [items, status, region, term, onlyWithWorks]);
 
   const regionCounts = useMemo(() => {
     const c = new Map<string, number>();
     let all = 0;
     for (const i of items) {
-      if (!okStatus(i) || !okSphere(i) || !okSearch(i)) continue;
+      if (!okStatus(i) || !okSphere(i) || !okSearch(i) || !okWorks(i)) continue;
       all++;
       if (i.region) c.set(i.region, (c.get(i.region) ?? 0) + 1);
     }
     c.set('Все', all);
     return c;
-  }, [items, status, sphere, term]);
+  }, [items, status, sphere, term, onlyWithWorks]);
 
   const filtered = useMemo(
     () =>
@@ -216,7 +217,7 @@ export default function Directory({
 
   // Статусов в импортированных данных нет — показывать фильтр, у которого
   // единственное непустое значение «Без статуса», незачем.
-  const showStatusFilter = statusCounts.all > statusCounts.none;
+  const showStatusFilter = statusCounts.all > statusCounts.none || status !== 'all';
 
   const opened = openId ? items.find((i) => i.id === openId) ?? null : null;
   const visibleWorks = showAllWorks ? works : works.slice(0, 6);
@@ -237,9 +238,9 @@ export default function Directory({
                 Здесь ученики Web3nity знакомятся, находят партнёров и клиентов и показывают, что уже запустили. Откройте профиль — и пишите человеку напрямую в Telegram.
               </p>
               <div className="flex flex-wrap gap-3 mt-8">
-                <a href="#people" className="inline-flex items-center gap-3 rounded-sm bg-accent text-ink px-5 py-3 text-[13px] font-extrabold hover:bg-white">
-                  Найти людей <span aria-hidden="true">↓</span>
-                </a>
+                <Link href="/students" className="inline-flex items-center gap-3 rounded-sm bg-accent text-ink px-5 py-3 text-[13px] font-extrabold hover:bg-white">
+                  Найти людей <span aria-hidden="true">→</span>
+                </Link>
                 <a href="#works" className="inline-flex items-center gap-3 rounded-sm border border-white/20 px-5 py-3 text-[13px] font-semibold hover:border-white hover:bg-white/5">
                   Проекты · {stats.works}
                 </a>
@@ -262,8 +263,8 @@ export default function Directory({
       <div className="max-w-[1320px] mx-auto px-5 sm:px-10 py-16 sm:py-24 overflow-x-clip">
         <section id="people" className="scroll-mt-28">
           <SectionHead title="База учеников" note={`${filtered.length} из ${items.length}`} />
-          <div className="grid lg:grid-cols-[290px_minmax(0,1fr)] gap-10 lg:gap-12 items-start">
-            <aside className="lg:sticky lg:top-[94px] rounded-lg bg-surface p-5 sm:p-6 border border-line">
+          <div className="grid grid-cols-1 lg:grid-cols-[290px_minmax(0,1fr)] gap-10 lg:gap-12 items-start">
+            <aside className="min-w-0 lg:sticky lg:top-[94px] rounded-lg bg-surface p-5 sm:p-6 border border-line">
               <div className="flex items-baseline justify-between mb-5">
                 <h3 className="font-display text-[13px]">Найти человека</h3>
                 {hasFilters && (
@@ -278,7 +279,7 @@ export default function Directory({
               <div className="flex flex-col gap-5">
                 {showStatusFilter && (
                   <FilterGroup label="Статус">
-                    {STATUS_OPTS.filter((o) => o.key === 'all' || statusCounts[o.key] > 0).map((o) => (
+                    {STATUS_OPTS.filter((o) => o.key === 'all' || o.key === status || statusCounts[o.key] > 0).map((o) => (
                       <Chip key={o.key} active={status === o.key} onClick={() => setStatus(o.key)}>{o.label}<span className="ml-1.5 opacity-45">{statusCounts[o.key]}</span></Chip>
                     ))}
                   </FilterGroup>
@@ -291,7 +292,7 @@ export default function Directory({
                   </FilterGroup>
                 )}
                 <FilterGroup label="Регион">
-                  {REGION_OPTS.filter((r) => r === 'Все' || (regionCounts.get(r) ?? 0) > 0).map((r) => (
+                  {REGION_OPTS.filter((r) => r === 'Все' || r === region || (regionCounts.get(r) ?? 0) > 0).map((r) => (
                     <Chip key={r} active={region === r} onClick={() => setRegion(r)}>{r}<span className="ml-1.5 opacity-45">{regionCounts.get(r) ?? 0}</span></Chip>
                   ))}
                 </FilterGroup>
@@ -302,12 +303,13 @@ export default function Directory({
               </div>
             </aside>
 
-            <div>
+            <div className="min-w-0">
               {filtered.length === 0 ? (
                 <div className="border border-line rounded-lg bg-surface py-20 px-6 text-center">
                   <div className="font-display text-[32px] text-accent mb-3" aria-hidden="true">0</div>
                   <h3 className="font-display text-[14px] text-ink mb-2">Совпадений нет</h3>
-                  <p className="text-[13px] text-text2">Сбросьте один из фильтров или попробуйте другой запрос.</p>
+                  <p className="text-[13px] text-text2 mb-5">Сбросьте один из фильтров или попробуйте другой запрос.</p>
+                  <button type="button" onClick={() => { setStatus('all'); setSphere('all'); setRegion('Все'); setQ(''); setOnlyWithWorks(false); }} className="rounded-sm border border-ink px-5 py-3 text-[12px] font-bold hover:bg-ink hover:text-white">Сбросить фильтры</button>
                 </div>
               ) : (
                 <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -610,7 +612,7 @@ function Avatar({ item, size }: { item: DirItem; size: number }) {
       className="flex items-center justify-center bg-accent-light text-accent-dark font-mono font-semibold flex-shrink-0 rounded-[14px]"
       style={{ width: size, height: size, fontSize: size * 0.38 }}
     >
-      {item.name[0]?.toUpperCase() ?? '?'}
+      {initialOf(item.name)}
     </div>
   );
 }
@@ -700,7 +702,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <h4 className="text-[10px] uppercase tracking-[.8px] text-text3 mb-1.5 font-medium">
         {title}
       </h4>
-      <p className="text-[13px] text-text2 leading-[1.6]">{children}</p>
+      <p className="text-[13px] text-text2 leading-[1.6] whitespace-pre-line break-words">{children}</p>
     </div>
   );
 }

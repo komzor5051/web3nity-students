@@ -1,8 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { REGION_OPTS } from '@/lib/region';
+import { initialOf, matchesTerms } from '@/lib/text';
 
 export type DirItem = {
   id: string;
@@ -55,11 +56,17 @@ function statusKey(s: DirItem['status']): 'learning' | 'cofounder' | 'client' | 
   return null;
 }
 
-function statusText(s: DirItem['status']): string {
+function statusText(s: DirItem['status']): string | null {
   if (s === 'just_learning') return 'Учусь';
   if (s === 'looking_for_partners') return 'Ищу партнёров';
   if (s === 'looking_for_clients') return 'Ищу клиентов';
-  return '—';
+  return null;
+}
+
+// Заполненные профили — наверх: пустые карточки из парсера в начале списка
+// создают ощущение, что база мёртвая.
+function fullness(i: DirItem): number {
+  return (i.bio ? 4 : 0) + (i.sphere ? 2 : 0) + (i.city || i.country ? 1 : 0) + (i.telegram ? 1 : 0) + (i.status ? 1 : 0);
 }
 
 function statusColor(s: DirItem['status']): { dot: string; text: string } {
@@ -85,6 +92,23 @@ export default function Directory({
   const [q, setQ] = useState<string>('');
   const [openId, setOpenId] = useState<string | null>(null);
   const [recsOpen, setRecsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!openId && !recsOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpenId(null);
+        setRecsOpen(false);
+      }
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [openId, recsOpen]);
 
   const spheres = useMemo(() => {
     // Только короткие и реально общие категории — длинные описательные «сферы»
@@ -121,9 +145,9 @@ export default function Directory({
   const okSearch = (i: DirItem) => {
     if (!term) return true;
     const hay = normalizeSearch(
-      [i.name, i.niche, i.sphere, i.city, i.country, i.bio].filter(Boolean).join(' '),
+      [i.name, i.niche, i.sphere, i.city, i.country, i.bio, i.telegram].filter(Boolean).join(' '),
     );
-    return hay.includes(term);
+    return matchesTerms(hay, term);
   };
 
   // Фасетные счётчики: для каждого фильтра учитываем все ОСТАЛЬНЫЕ активные
@@ -164,11 +188,21 @@ export default function Directory({
   }, [items, status, sphere, term]);
 
   const filtered = useMemo(
-    () => items.filter((i) => okStatus(i) && okSphere(i) && okRegion(i) && okSearch(i)),
+    () =>
+      items
+        .filter((i) => okStatus(i) && okSphere(i) && okRegion(i) && okSearch(i))
+        .sort((a, b) => fullness(b) - fullness(a) || a.name.localeCompare(b.name, 'ru')),
     [items, status, sphere, region, term],
   );
 
   const opened = openId ? items.find((i) => i.id === openId) ?? null : null;
+  const hasFilters = status !== 'all' || sphere !== 'all' || region !== 'Все' || q !== '';
+  const resetFilters = () => {
+    setStatus('all');
+    setSphere('all');
+    setRegion('Все');
+    setQ('');
+  };
 
   return (
     <div className="max-w-[1260px] mx-auto px-6 sm:px-10 py-7 overflow-x-clip">
@@ -180,8 +214,8 @@ export default function Directory({
         </p>
         <div className="flex flex-wrap gap-4 mt-2.5 text-[13px] text-text3">
           <StatBadge color="bg-accent" label={`${stats.total} ученик${plural(stats.total)}`} />
-          <StatBadge color="bg-green" label={`${stats.countries} стран`} />
-          <StatBadge color="bg-blue" label={`${stats.spheres} сфер`} />
+          <StatBadge color="bg-green" label={`${stats.countries} ${pluralWord(stats.countries, 'страна', 'страны', 'стран')}`} />
+          <StatBadge color="bg-blue" label={`${stats.spheres} ${pluralWord(stats.spheres, 'сфера', 'сферы', 'сфер')}`} />
         </div>
       </section>
 
@@ -199,12 +233,21 @@ export default function Directory({
 
       <div className="flex items-center justify-between mb-3.5">
         <h2 className="font-display text-[20px]">Все ученики</h2>
-        <span className="text-[12px] text-text3">{filtered.length} чел.</span>
+        <div className="flex items-center gap-3 text-[12px] text-text3">
+          {hasFilters && (
+            <button type="button" onClick={resetFilters} className="underline underline-offset-2 hover:text-accent py-1">
+              сбросить
+            </button>
+          )}
+          <span>{filtered.length} чел.</span>
+        </div>
       </div>
 
       <div className="relative mb-3.5">
         <SearchIcon />
         <input
+          type="search"
+          aria-label="Поиск по ученикам"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Поиск по имени, сфере, городу..."
@@ -216,7 +259,7 @@ export default function Directory({
         <FilterGroup label="Статус">
           {STATUS_OPTS.filter(
             // «Без статуса» прячем, когда таких нет — чтобы не мозолил пустым нулём
-            (o) => o.key !== 'none' || statusCounts.none > 0,
+            (o) => o.key !== 'none' || o.key === status || statusCounts.none > 0,
           ).map((o) => (
             <Chip key={o.key} active={status === o.key} onClick={() => setStatus(o.key)}>
               {o.label}
@@ -250,7 +293,14 @@ export default function Directory({
         <div className="text-center py-12 text-text3">
           <div className="text-3xl mb-2">·</div>
           <h3 className="text-[15px] text-text2 mb-1">Никого не нашли</h3>
-          <p className="text-[13px]">Попробуйте изменить фильтры</p>
+          <p className="text-[13px] mb-4">Попробуйте изменить фильтры</p>
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="px-4 py-2 rounded-full border border-line text-[12px] text-text2 hover:border-accent hover:text-accent"
+          >
+            Сбросить фильтры
+          </button>
         </div>
       ) : (
         <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -284,10 +334,12 @@ function RecsModal({
       }}
       className="fixed inset-0 bg-black/35 backdrop-blur-[4px] z-40 flex items-center justify-center p-4"
     >
-      <div className="bg-surface rounded-lg w-[560px] max-w-full max-h-[85vh] overflow-y-auto shadow-lg relative">
+      <div role="dialog" aria-modal="true" aria-label="Ваши рекомендации" className="bg-surface rounded-lg w-[560px] max-w-full max-h-[85vh] overflow-y-auto shadow-lg relative">
         <button
+          type="button"
           onClick={onClose}
-          className="absolute top-3.5 right-3.5 bg-surface-hover w-7 h-7 rounded-full text-text2 text-[13px] flex items-center justify-center hover:bg-line"
+          aria-label="Закрыть"
+          className="absolute top-3 right-3 bg-surface-hover w-9 h-9 rounded-full text-text2 text-[14px] flex items-center justify-center hover:bg-line"
         >
           ✕
         </button>
@@ -325,7 +377,7 @@ function RecsModal({
                       </a>
                     )}
                     <Link
-                      href={`/students/${item.slug}`}
+                      href={`/s/${item.slug}`}
                       className="text-[12px] px-3 py-1.5 rounded-full border border-line text-text2 hover:border-accent hover:text-accent"
                     >
                       Открыть профиль
@@ -406,19 +458,33 @@ function SearchIcon() {
 
 function Card({ item, index, isMe, onOpen }: { item: DirItem; index: number; isMe: boolean; onOpen: () => void }) {
   const color = statusColor(item.status);
+  const status = statusText(item.status);
+  const place = [item.city, item.country].filter(Boolean).join(', ');
+  // Корень — не <button>: внутри лежит ссылка «Написать», а ссылка внутри
+  // кнопки — невалидный HTML, и на мобиле тап по ней открывал модалку.
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={`Открыть профиль: ${item.name}`}
       onClick={onOpen}
-      className={`w3n-card-anim text-left w-full h-full flex flex-col bg-surface border rounded p-[18px] hover:shadow-md hover:-translate-y-0.5 transition-all ${
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className={`vibe-card-anim cursor-pointer text-left w-full h-full flex flex-col bg-surface border rounded p-[18px] hover:shadow-md hover:-translate-y-0.5 transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent touch-manipulation ${
         isMe ? 'border-accent' : 'border-line'
       }`}
-      style={{ animationDelay: `${index * 0.03}s` }}
+      style={{ animationDelay: `${Math.min(index, 20) * 0.03}s` }}
     >
       <div className="flex gap-3 mb-2.5">
         <Avatar item={item} size={40} radius={10} />
         <div className="min-w-0 flex-1">
           <div className="font-semibold text-[14px] truncate flex items-center gap-1.5">
-            {item.name}
+            <span className="truncate">{item.name}</span>
             {isMe && (
               <span className="shrink-0 text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-accent text-white">
                 это вы
@@ -427,9 +493,7 @@ function Card({ item, index, isMe, onOpen }: { item: DirItem; index: number; isM
           </div>
           <div className="text-[11px] text-text3 flex items-center gap-1 truncate">
             <PinIcon />
-            <span className="truncate">
-              {[item.city, item.country].filter(Boolean).join(', ') || '—'}
-            </span>
+            <span className="truncate">{place || 'Город не указан'}</span>
           </div>
         </div>
       </div>
@@ -448,24 +512,28 @@ function Card({ item, index, isMe, onOpen }: { item: DirItem; index: number; isM
         )}
       </div>
       <div className="mt-auto flex justify-between items-center pt-2.5 border-t border-line-light min-h-[38px]">
-        <div className={`flex items-center gap-1.5 text-[11px] font-medium ${color.text}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${color.dot}`} />
-          {statusText(item.status)}
-        </div>
+        {status ? (
+          <div className={`flex items-center gap-1.5 text-[11px] font-medium ${color.text}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${color.dot}`} />
+            {status}
+          </div>
+        ) : (
+          <span className="text-[11px] text-text3">Подробнее</span>
+        )}
         {item.telegram ? (
           <a
             onClick={(e) => e.stopPropagation()}
             href={`https://t.me/${item.telegram}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="px-3 py-1 rounded-full border border-line bg-transparent text-[11px] text-text2 hover:bg-accent hover:text-white hover:border-accent transition-colors flex items-center gap-1"
+            className="px-3 py-1.5 rounded-full border border-line bg-transparent text-[11px] text-text2 hover:bg-accent hover:text-white hover:border-accent transition-colors flex items-center gap-1"
           >
             <ChatIcon size={12} />
             Написать
           </a>
         ) : null}
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -494,7 +562,7 @@ function Avatar({ item, size, radius }: { item: DirItem; size: number; radius: n
         fontSize: size * 0.38,
       }}
     >
-      {item.name[0]?.toUpperCase() ?? '?'}
+      {initialOf(item.name)}
     </div>
   );
 }
@@ -525,16 +593,18 @@ function Modal({ item, onClose }: { item: DirItem; onClose: () => void }) {
       }}
       className="fixed inset-0 bg-black/35 backdrop-blur-[4px] z-40 flex items-center justify-center p-4"
     >
-      <div className="bg-surface rounded-lg w-[500px] max-w-full max-h-[85vh] overflow-y-auto shadow-lg relative">
+      <div role="dialog" aria-modal="true" aria-label={item.name} className="bg-surface rounded-lg w-[500px] max-w-full max-h-[85vh] overflow-y-auto shadow-lg relative">
         <button
+          type="button"
           onClick={onClose}
-          className="absolute top-3.5 right-3.5 bg-surface-hover w-7 h-7 rounded-full text-text2 text-[13px] flex items-center justify-center hover:bg-line"
+          aria-label="Закрыть"
+          className="absolute top-3 right-3 bg-surface-hover w-9 h-9 rounded-full text-text2 text-[14px] flex items-center justify-center hover:bg-line"
         >
           ✕
         </button>
-        <div className="px-6 pt-6 flex gap-3.5">
+        <div className="px-6 pt-6 pr-14 flex gap-3.5">
           <Avatar item={item} size={52} radius={13} />
-          <div>
+          <div className="min-w-0">
             <h2 className="font-display text-[20px] mb-0.5">{item.name}</h2>
             <div className="text-[13px] text-text2">
               {[item.city, item.country].filter(Boolean).join(', ')}
@@ -556,15 +626,17 @@ function Modal({ item, onClose }: { item: DirItem; onClose: () => void }) {
               </span>
             </div>
           )}
-          <div className="mb-4">
-            <h4 className="text-[10px] uppercase tracking-[.8px] text-text3 mb-1.5 font-medium">
-              Статус
-            </h4>
-            <div className={`flex items-center gap-1.5 text-[13px] ${color.text}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${color.dot}`} />
-              {statusText(item.status)}
+          {statusText(item.status) && (
+            <div className="mb-4">
+              <h4 className="text-[10px] uppercase tracking-[.8px] text-text3 mb-1.5 font-medium">
+                Статус
+              </h4>
+              <div className={`flex items-center gap-1.5 text-[13px] ${color.text}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${color.dot}`} />
+                {statusText(item.status)}
+              </div>
             </div>
-          </div>
+          )}
           <div className="flex gap-2 pt-4 border-t border-line-light">
             {item.telegram ? (
               <a
@@ -582,10 +654,10 @@ function Modal({ item, onClose }: { item: DirItem; onClose: () => void }) {
               </span>
             )}
             <Link
-              href={`/students/${item.slug}`}
+              href={`/s/${item.slug}`}
               className="px-4 py-2.5 rounded-sm bg-surface border border-line text-[13px] text-text2 hover:bg-surface-hover"
             >
-              Открыть
+              Профиль
             </Link>
           </div>
         </div>
@@ -600,9 +672,18 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <h4 className="text-[10px] uppercase tracking-[.8px] text-text3 mb-1.5 font-medium">
         {title}
       </h4>
-      <p className="text-[13px] text-text2 leading-[1.6]">{children}</p>
+      <p className="text-[13px] text-text2 leading-[1.6] whitespace-pre-line break-words">{children}</p>
     </div>
   );
+}
+
+function pluralWord(n: number, one: string, few: string, many: string): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 14) return many;
+  if (mod10 === 1) return one;
+  if (mod10 >= 2 && mod10 <= 4) return few;
+  return many;
 }
 
 function plural(n: number): string {

@@ -1,6 +1,7 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { initialOf } from '@/lib/text';
 import { getCurrentStudent } from '@/lib/auth';
 
 export const metadata: Metadata = {
@@ -23,7 +24,7 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const me = await getCurrentStudent().catch(() => null);
-  const initial = me?.display_name?.[0]?.toUpperCase() ?? '?';
+  const initial = initialOf(me?.display_name);
 
   return (
     <html lang="ru">
@@ -43,11 +44,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               className="flex items-center gap-3 font-bold select-none touch-manipulation group"
             >
               <span className="w-8 h-8 bg-accent rounded-sm shrink-0 grid place-items-center text-ink font-display text-[11px] group-hover:rotate-6">W</span>
-              <span className="whitespace-nowrap font-display text-[11px] sm:text-[12px] tracking-[-.02em]">WEB3NITY</span>
+              <span className="hidden min-[400px]:inline whitespace-nowrap font-display text-[11px] sm:text-[12px] tracking-[-.02em]">WEB3NITY</span>
             </Link>
-            <nav aria-label="Основная навигация" className="hidden md:flex items-center gap-8 ml-auto mr-4 font-mono text-[11px] uppercase tracking-[.08em] text-white/60">
-              <a href="/#people" className="hover:text-white">Участники</a>
-              <a href="/#works" className="hover:text-white">Работы</a>
+            <nav aria-label="Основная навигация" className="flex items-center gap-4 sm:gap-8 ml-auto sm:mr-4 font-mono text-[10px] sm:text-[11px] uppercase tracking-[.08em] text-white/60">
+              <Link href="/students" className="hover:text-white py-2">Участники</Link>
+              <a href="/#works" className="hover:text-white py-2">Работы</a>
             </nav>
             <div className="flex items-center gap-3 text-[13px] text-white/70">
             {me ? (

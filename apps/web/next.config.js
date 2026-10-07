@@ -5,6 +5,14 @@ const nextConfig = {
   experimental: {
     serverActions: { bodySizeLimit: '40mb' },
   },
+  // Профиль и работа живут на /s/[slug] и /w/[id]. Старые /students/[slug]
+  // остались от первой версии каталога и сверстаны иначе — уводим на основные.
+  async redirects() {
+    return [
+      { source: '/students/:slug/works/:id', destination: '/w/:id', permanent: true },
+      { source: '/students/:slug', destination: '/s/:slug', permanent: true },
+    ];
+  },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '*.supabase.co' },

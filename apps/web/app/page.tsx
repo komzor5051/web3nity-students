@@ -1,6 +1,7 @@
 import { supabase, studentSlug, tbl, type StudentRow, type WorkRow } from '@/lib/db';
 import { getCurrentStudent, serviceClient } from '@/lib/auth';
 import { resolveRegion } from '@/lib/region';
+import { canonicalSphere, cleanBio, tgHandle } from '@/lib/text';
 import { workScreenshotUrl } from '@/lib/works';
 import Directory, { type DirItem, type GalleryWork } from './directory';
 
@@ -53,11 +54,11 @@ export default async function Home() {
     country: s.country,
     region: resolveRegion(s.city, s.country),
     niche: s.niche,
-    sphere: s.sphere,
-    bio: s.bio,
-    goal: s.goal,
+    sphere: canonicalSphere(s.sphere),
+    bio: cleanBio(s.bio),
+    goal: cleanBio(s.goal),
     status: s.status,
-    telegram: s.telegram_username,
+    telegram: tgHandle(s.telegram_username),
     avatarUrl: s.avatar_url,
     workCount: worksByStudent.get(s.id)?.length ?? 0,
   }));
