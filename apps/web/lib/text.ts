@@ -50,5 +50,7 @@ export function tgHandle(s: string | null): string | null {
  *  `name[0]` у «🔷Юрий» — половинка суррогатной пары, рисуется как «�». */
 export function initialOf(name: string | null | undefined): string {
   const m = (name ?? '').match(/[\p{L}\p{N}]/u);
-  return m ? m[0].toUpperCase() : '?';
+  if (m) return m[0].toUpperCase();
+  // Имя целиком из эмодзи («📲») — показываем сам символ, а не «?».
+  return Array.from((name ?? '').trim())[0] ?? '?';
 }

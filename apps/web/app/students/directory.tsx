@@ -511,7 +511,7 @@ function Card({ item, index, isMe, onOpen }: { item: DirItem; index: number; isM
           </span>
         )}
       </div>
-      <div className="mt-auto flex justify-between items-center pt-2.5 border-t border-line-light min-h-[38px]">
+      <div className="mt-auto flex justify-between items-center pt-2.5 border-t border-line-light min-h-[42px]">
         {status ? (
           <div className={`flex items-center gap-1.5 text-[11px] font-medium ${color.text}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${color.dot}`} />
