@@ -38,15 +38,9 @@ export default async function Home() {
   const me = await getCurrentStudent().catch(() => null);
   const myId = me?.id ?? null;
 
-  // В каталог попадают только те, у кого есть что показать: работа, рассказ о
-  // себе или собственноручно заполненный профиль. Люди, которых парсер нашёл в
-  // чате, но которые ничего о себе не сказали, витрине ничего не дают — они
-  // появятся сами, когда войдут через Telegram и заполнят профиль.
-  const registered = list.filter(
-    (s) => (worksByStudent.get(s.id)?.length ?? 0) > 0 || Boolean(s.bio) || Boolean(s.self_edited_at),
-  );
-
-  const items: DirItem[] = registered.map((s) => ({
+  // Показываем всех опубликованных, как и /students: пустые профили уходят
+  // в конец списка сортировкой по заполненности в Directory.
+  const items: DirItem[] = list.map((s) => ({
     id: s.id,
     slug: studentSlug(s),
     name: s.display_name,
