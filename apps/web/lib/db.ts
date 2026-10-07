@@ -41,6 +41,8 @@ export type StudentRow = {
   cohort: string;
   import_key: string | null;
   is_published: boolean;
+  /** Проставляется, когда человек сам отредактировал профиль через сайт. */
+  self_edited_at: string | null;
   updated_at: string;
 };
 

@@ -10,7 +10,7 @@ export default async function Home() {
   const { data, error } = await supabase
     .from(tbl('students'))
     .select(
-      'id,display_name,avatar_url,city,country,niche,sphere,bio,goal,status,telegram_username,import_key,updated_at',
+      'id,display_name,avatar_url,city,country,niche,sphere,bio,goal,status,telegram_username,import_key,self_edited_at,updated_at',
     )
     .eq('is_published', true)
     .limit(500);
@@ -37,7 +37,15 @@ export default async function Home() {
   const me = await getCurrentStudent().catch(() => null);
   const myId = me?.id ?? null;
 
-  const items: DirItem[] = list.map((s) => ({
+  // В каталог попадают только те, у кого есть что показать: работа, рассказ о
+  // себе или собственноручно заполненный профиль. Люди, которых парсер нашёл в
+  // чате, но которые ничего о себе не сказали, витрине ничего не дают — они
+  // появятся сами, когда войдут через Telegram и заполнят профиль.
+  const registered = list.filter(
+    (s) => (worksByStudent.get(s.id)?.length ?? 0) > 0 || Boolean(s.bio) || Boolean(s.self_edited_at),
+  );
+
+  const items: DirItem[] = registered.map((s) => ({
     id: s.id,
     slug: studentSlug(s),
     name: s.display_name,
