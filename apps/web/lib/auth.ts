@@ -73,6 +73,21 @@ export async function pollAuthToken(token: string): Promise<
   }
   if (!data.student_id) return { status: 'expired' };
 
+  // Вторая проверка участия — на случай старой версии бота, которая
+  // подтверждала вход любому. Анкету, созданную таким входом, прячем.
+  const { data: student } = await svc
+    .from(tbl('students'))
+    .select('id, telegram_user_id, source_message_id')
+    .eq('id', data.student_id)
+    .maybeSingle();
+  if (!student?.telegram_user_id || !(await isMember(student.telegram_user_id))) {
+    if (student && !student.source_message_id) {
+      await svc.from(tbl('students')).update({ is_published: false }).eq('id', student.id);
+    }
+    await svc.from(tbl('web_auth_tokens')).delete().eq('token', token);
+    return { status: 'denied' };
+  }
+
   const sessionId = generateToken(32);
   const sessExpires = new Date(Date.now() + SESSION_TTL_MS).toISOString();
   const ins = await svc
@@ -113,13 +128,18 @@ export async function getCurrentStudent(): Promise<StudentRow | null> {
     .maybeSingle();
   const me = (student as StudentRow | null) ?? null;
   if (!me?.telegram_user_id) return null;
-  const { data: member } = await svc
+  return (await isMember(me.telegram_user_id)) ? me : null;
+}
+
+/** Ученик ли это: Telegram ID в списке участников курса, доступ не закрыт. */
+export async function isMember(telegramUserId: number): Promise<boolean> {
+  const { data } = await serviceClient()
     .from(tbl('members'))
     .select('telegram_user_id')
-    .eq('telegram_user_id', me.telegram_user_id)
+    .eq('telegram_user_id', telegramUserId)
     .eq('revoked', false)
     .maybeSingle();
-  return member ? me : null;
+  return Boolean(data);
 }
 
 /** Для страниц: без подтверждённого ученика — на экран входа. */

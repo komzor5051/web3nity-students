@@ -14,7 +14,18 @@ export async function publishedStudents(): Promise<StudentRow[]> {
     .eq('is_published', true)
     .limit(1000);
   if (error) throw new Error(`students: ${error.message}`);
-  return (data ?? []) as StudentRow[];
+  const { data: members, error: mErr } = await serviceClient()
+    .from(tbl('members'))
+    .select('telegram_user_id')
+    .eq('revoked', false)
+    .limit(5000);
+  if (mErr) throw new Error(`members: ${mErr.message}`);
+  const ids = new Set((members ?? []).map((m) => Number(m.telegram_user_id)));
+  // Анкета из импорта чатов — ученик по определению. Анкета, заведённая
+  // входом через бота, видна, только если человек среди участников курса.
+  return ((data ?? []) as StudentRow[]).filter(
+    (s) => s.source_message_id || !s.telegram_user_id || ids.has(Number(s.telegram_user_id)),
+  );
 }
 
 /** Проекты, видимые ученикам: опубликованы, не скрыты организатором, автор в каталоге. */
