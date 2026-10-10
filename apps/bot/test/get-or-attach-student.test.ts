@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { getOrAttachStudent, type TgUser } from '../src/students.js';
+import { getOrAttachStudent, isMember, type TgUser } from '../src/students.js';
 
 /**
  * Лёгкий мок Supabase-клиента. Каждый вызов db.from(...) собирает цепочку
@@ -40,6 +40,12 @@ function makeDb(handler: Handler): { db: SupabaseClient; ops: QueryOp[] } {
       },
       ilike(col: string, val: unknown) {
         op.ilike[col] = val;
+        return chain;
+      },
+      order() {
+        return chain;
+      },
+      limit() {
         return chain;
       },
       maybeSingle() {
@@ -210,7 +216,17 @@ describe('getOrAttachStudent', () => {
     expect(insertSpy).toHaveBeenCalledOnce();
     expect(insertSpy.mock.calls[0]![0]).toMatchObject({
       telegram_user_id: 42,
-      is_published: true, // профиль виден по умолчанию
+      // новая анкета скрыта, пока ученик не заполнит форму знакомства
+      is_published: false,
     });
+  });
+});
+
+describe('isMember', () => {
+  it('пускает только участника из списка без закрытого доступа', async () => {
+    const { db, ops } = makeDb((op) => (op.eq.telegram_user_id === 42 ? { data: { telegram_user_id: 42 } } : { data: null }));
+    expect(await isMember(db, 42)).toBe(true);
+    expect(await isMember(db, 7)).toBe(false);
+    expect(ops[0]!.eq.revoked).toBe(false);
   });
 });

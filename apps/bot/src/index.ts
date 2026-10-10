@@ -1,7 +1,7 @@
 import './env.js';
 import { Telegraf, Markup } from 'telegraf';
 import { getServiceClient, tbl } from '@vibe/db';
-import { getOrAttachStudent } from './students.js';
+import { getOrAttachStudent, isMember } from './students.js';
 import { ensureAvatar } from './avatar.js';
 
 // === Бот = только авторизация ===
@@ -48,6 +48,24 @@ bot.use(async (ctx, next) => {
 bot.start(async (ctx) => {
   const tgUser = ctx.from;
   if (!tgUser) return;
+  const payload = (ctx as unknown as { startPayload?: string }).startPayload ?? '';
+
+  // Платформа закрыта для учеников: пускаем только участников чатов курса.
+  // Анкету постороннему не создаём; токен помечаем, чтобы сайт показал
+  // «Доступ только для учеников».
+  if (!(await isMember(db, tgUser.id))) {
+    if (payload.startsWith('auth_')) {
+      await db
+        .from(tbl('web_auth_tokens'))
+        .update({ telegram_user_id: tgUser.id, denied_at: new Date().toISOString() })
+        .eq('token', payload.slice('auth_'.length))
+        .is('confirmed_at', null);
+    }
+    await ctx.reply(
+      'Платформа доступна только ученикам практикума «Вайбкодинг» Web3nity School. Ваш Telegram-аккаунт не найден в чатах курса. Если вы учитесь на практикуме, напишите организатору.',
+    );
+    return;
+  }
 
   const student = await getOrAttachStudent(db, {
     id: tgUser.id,
@@ -60,8 +78,7 @@ bot.start(async (ctx) => {
   // Fire-and-forget: вход блокировать нельзя, осечка не должна ронять /start.
   void ensureAvatar(ctx, db, student).catch((e) => console.warn('[avatar] ', e));
 
-  // Deep-link вход: /start auth_<token>. payload — из ctx.startPayload.
-  const payload = (ctx as unknown as { startPayload?: string }).startPayload ?? '';
+  // Deep-link вход: /start auth_<token>.
   if (payload.startsWith('auth_')) {
     const token = payload.slice('auth_'.length);
     const upd = await db
@@ -78,8 +95,8 @@ bot.start(async (ctx) => {
       .maybeSingle();
     if (upd.data) {
       await ctx.reply(
-        `Готово, ${student.display_name}. Нажмите кнопку ниже — откроется ваш личный кабинет, вы уже залогинены.`,
-        Markup.inlineKeyboard([[Markup.button.url('Открыть личный кабинет', claimUrl(token))]]),
+        `Готово, ${student.display_name}. Нажмите кнопку ниже — откроется платформа учеников, вход уже выполнен.`,
+        Markup.inlineKeyboard([[Markup.button.url('Открыть платформу', claimUrl(token))]]),
       );
       return;
     }
@@ -93,7 +110,7 @@ bot.start(async (ctx) => {
   // Голый /start без токена — пользователь открыл бота напрямую.
   // Не гоняем «туда-сюда»: коротко объясняем роль бота и даём одну кнопку.
   await ctx.reply(
-    'Личный кабинет, профиль и работы — на сайте. Бот нужен только чтобы подтвердить вход.\n\nОткройте страницу входа и нажмите «Войти через Telegram» — дальше всё само.',
+    'Анкета и проекты — на платформе учеников. Бот нужен только чтобы подтвердить вход.\n\nОткройте страницу входа и нажмите «Войти через Telegram».',
     Markup.inlineKeyboard([[Markup.button.url('Войти на сайте', LOGIN_URL)]]),
   );
 });

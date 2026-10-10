@@ -1,89 +1,95 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { supabase, tbl, studentSlug, type WorkRow, type StudentRow } from '@/lib/db';
-import { workScreenshotUrl, hostLabel } from '@/lib/works';
+import { requireStudent } from '@/lib/auth';
+import { KIND_LABEL, toProjectCard } from '@/lib/catalog';
+import { studentSlug } from '@/lib/db';
+import { findProject, findStudentById } from '@/lib/queries';
+import { ProjectPreview, ProjectTags } from '@/lib/ui';
+import { cleanBio } from '@/lib/text';
 
-export const revalidate = 300;
+export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const { data: work } = await supabase
-    .from(tbl('works'))
-    .select('title, description')
-    .eq('id', id)
-    .eq('is_published', true)
-    .maybeSingle<Pick<WorkRow, 'title' | 'description'>>();
-  if (!work) return {};
-  return {
-    title: work.title,
-    description: work.description ?? undefined,
-    openGraph: { title: work.title, description: work.description ?? undefined },
-  };
+  await requireStudent();
+  const w = await findProject((await params).id);
+  return { title: w?.title ?? 'Проект' };
 }
 
-export default async function WorkPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+function Field({ title, text }: { title: string; text: string | null | undefined }) {
+  const t = text?.trim();
+  if (!t) return null;
+  return (
+    <div className="field">
+      <strong>{title}</strong>
+      <p>{t}</p>
+    </div>
+  );
+}
 
-  const { data: work } = await supabase
-    .from(tbl('works'))
-    .select('*')
-    .eq('id', id)
-    .eq('is_published', true)
-    .maybeSingle<WorkRow>();
+function hostLabel(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
 
-  if (!work) notFound();
+export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
+  const me = await requireStudent();
+  const w = await findProject((await params).id);
+  if (!w) notFound();
+  const author = await findStudentById(w.student_id);
+  const own = w.student_id === me.id;
+  // Скрытый проект или проект скрытой анкеты видит только автор.
+  if (!author || (!own && (!w.is_published || w.hidden_by_admin || !author.is_published))) notFound();
 
-  const { data: author } = await supabase
-    .from(tbl('students'))
-    .select('id, display_name, telegram_username, niche, city, avatar_url')
-    .eq('id', work.student_id)
-    .eq('is_published', true)
-    .maybeSingle<StudentRow>();
-
-  const shot = workScreenshotUrl(work);
+  const p = toProjectCard(w, author);
 
   return (
-    <div className="max-w-[1180px] mx-auto px-5 sm:px-10 py-10 sm:py-16">
-      <Link href="/#works" className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.08em] text-text3 hover:text-accent">← Все работы</Link>
-
-      <header className="mt-8 grid lg:grid-cols-[minmax(0,1fr)_300px] gap-8 lg:gap-16 items-end border-b border-ink pb-10">
-        <div>
-          <p className="font-mono text-[9px] uppercase tracking-[.12em] text-accent mb-4">Проект ученика</p>
-          <h1 className="font-display text-[34px] sm:text-[52px] leading-[1] tracking-[-.05em] text-balance">{work.title}</h1>
-        </div>
-        {author ? (
-          <Link href={`/s/${studentSlug(author)}`} className="group rounded-lg bg-surface border border-line p-4 flex items-center justify-between gap-4 hover:border-ink">
-            <span><span className="block font-mono text-[9px] uppercase tracking-[.08em] text-text3 mb-1">Автор</span><span className="text-[13px] font-bold group-hover:text-accent">{author.display_name}</span>{author.city ? <span className="block text-[11px] text-text3 mt-1">{author.city}</span> : null}</span>
-            <span aria-hidden="true">→</span>
-          </Link>
-        ) : null}
-      </header>
-
-      {shot ? (
-        <div className="mt-8 sm:mt-12 rounded-lg bg-ink p-2 sm:p-4 overflow-hidden">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={shot} alt={work.title} className="w-full rounded-sm object-cover object-top" />
-        </div>
-      ) : (
-        <div className="mt-8 sm:mt-12 rounded-lg bg-accent min-h-[320px] grid place-items-center p-8"><span className="font-display text-[24px] text-ink text-center">{work.live_url ? hostLabel(work.live_url) : work.title}</span></div>
-      )}
-
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_300px] gap-10 lg:gap-16 mt-10 sm:mt-14 items-start">
-        <div>
-          {work.description ? <p className="text-[15px] sm:text-[17px] leading-[1.8] text-ink whitespace-pre-line max-w-[65ch] text-pretty">{work.description}</p> : <p className="text-[14px] text-text3">Автор пока не добавил описание проекта.</p>}
-          {work.stack.length ? (
-            <div className="mt-8 flex flex-wrap gap-2">{work.stack.map((s) => <span key={s} className="font-mono text-[10px] px-2.5 py-1 bg-tag-bg text-tag-text rounded-sm">{s}</span>)}</div>
-          ) : null}
-        </div>
-        <aside className="rounded-lg bg-surface border border-line p-5">
-          <p className="font-display text-[13px]">Посмотреть проект</p>
-          <div className="mt-4 flex flex-col gap-2">
-            {work.live_url ? <a href={work.live_url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-sm bg-accent text-ink px-4 py-3 text-[11px] font-bold hover:bg-ink hover:text-white">Открыть сайт <span aria-hidden="true">↗</span></a> : null}
-            {work.repo_url ? <a href={work.repo_url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-sm border border-line px-4 py-3 text-[11px] font-semibold hover:border-ink">Репозиторий <span aria-hidden="true">↗</span></a> : null}
+    <>
+      <Link className="back" href="/projects">
+        ← Все проекты
+      </Link>
+      <div className="split detail">
+        <section>
+          <div className="eyebrow">Проект ученика{w.kind ? ` · ${KIND_LABEL[w.kind]}` : ''}</div>
+          <h1>{w.title}</h1>
+          <ProjectTags p={p} />
+          <Field title="Какую задачу решает и для кого" text={cleanBio(w.description)} />
+          <Field title="Что уже получилось реализовать" text={w.features} />
+          <Field title="Какая помощь или обратная связь нужна" text={w.feedback_request} />
+          <div className="field">
+            <strong>Автор</strong>
+            {author.is_published ? <Link href={`/s/${studentSlug(author)}`}>{author.display_name} →</Link> : <p>{author.display_name}</p>}
           </div>
-          {work.screenshot_failed && work.live_url ? <p className="mt-4 text-[11px] leading-relaxed text-text3">Превью недоступно — сайт не отвечал в момент съёмки.</p> : null}
+          {w.hidden_by_admin ? <p className="nolink">Проект скрыт организатором и виден только вам.</p> : null}
+          <div className="actions">
+            {w.live_url ? (
+              <a className="btn" href={w.live_url} target="_blank" rel="noopener noreferrer">
+                Открыть проект ↗
+              </a>
+            ) : null}
+            {w.repo_url ? (
+              <a className="btn secondary" href={w.repo_url} target="_blank" rel="noopener noreferrer">
+                Код проекта ↗
+              </a>
+            ) : null}
+            {own ? (
+              <Link className="btn action-blue" href={`/profile/projects/${w.id}`}>
+                Редактировать проект →
+              </Link>
+            ) : null}
+          </div>
+          {!w.live_url ? <p className="nolink">Ссылка на проект не добавлена.</p> : null}
+        </section>
+        <aside className="panel">
+          <ProjectPreview p={p} />
+          <p className="location">
+            {p.imageUrl ? 'Скриншот проекта' : 'Условный макет: скриншот не добавлен'}
+            {w.live_url ? ` · ${hostLabel(w.live_url)}` : ''}
+          </p>
         </aside>
       </div>
-    </div>
+    </>
   );
 }

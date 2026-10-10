@@ -1,17 +1,6 @@
-import { createClient } from '@supabase/supabase-js';
-
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
-const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY;
-
-if (!url || !anon) {
-  // На этапе билда переменных может ещё не быть. Кидаем явную ошибку при первом обращении.
-  // eslint-disable-next-line no-console
-  console.warn('Supabase env vars are missing — public reads will fail.');
-}
-
-export const supabase = createClient(url ?? 'http://localhost', anon ?? 'anon', {
-  auth: { persistSession: false },
-});
+// Все чтения данных учеников идут через service-клиент на сервере после
+// проверки сессии (lib/auth.ts). Анонимного клиента больше нет: платформа
+// закрыта для посторонних, анонимные политики чтения в базе сняты.
 
 /**
  * Префикс таблиц. Пусто = выделенный Supabase-проект.
@@ -22,6 +11,8 @@ export const TABLE_PREFIX = process.env.NEXT_PUBLIC_SUPABASE_TABLE_PREFIX ?? '';
 export function tbl(name: string): string {
   return TABLE_PREFIX + name;
 }
+
+export type StudentStatus = 'looking_for_clients' | 'looking_for_partners' | 'just_learning';
 
 export type StudentRow = {
   id: string;
@@ -36,8 +27,16 @@ export type StudentRow = {
   expertise: string | null;
   hobbies: string | null;
   age: number | null;
-  status: 'looking_for_clients' | 'looking_for_partners' | 'just_learning' | null;
+  status: StudentStatus | null;
+  /** Несколько статусов из формы; status — первый из них, для старого кода. */
+  statuses: StudentStatus[];
+  /** Регион, выбранный учеником. null — вычисляется из города/страны. */
+  region: string | null;
+  /** «Для чего пришли на практикум и чего ожидаете». */
+  expectations: string | null;
+  telegram_user_id: number | null;
   telegram_username: string | null;
+  source_message_id: string | null;
   cohort: string;
   import_key: string | null;
   is_published: boolean;
@@ -61,7 +60,17 @@ export type WorkRow = {
   screenshot_path: string | null;
   screenshot_failed: boolean;
   stack: string[];
+  /** Тип инструмента: выбирает автор из общего справочника. */
+  kind: WorkKind | null;
+  stage: WorkStage | null;
+  features: string | null;
+  feedback_request: string | null;
+  /** Скрыт организатором — не показывается никому, кроме автора. */
+  hidden_by_admin: boolean;
 };
+
+export type WorkKind = 'site' | 'bot' | 'crm' | 'other';
+export type WorkStage = 'in_progress' | 'done';
 
 /** Транслит для slug, если у студента нет telegram_username. */
 export function transliterate(s: string): string {

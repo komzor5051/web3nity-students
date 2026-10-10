@@ -31,8 +31,9 @@ export async function GET(req: NextRequest) {
     if (result.status === 'confirmed') {
       const jar = await cookies();
       setSessionCookie(jar, result.sessionId);
-      return redirectTo('/profile');
+      return redirectTo('/');
     }
+    if (result.status === 'denied') return redirectTo('/login?denied=1');
   }
   return redirectTo('/login');
 }

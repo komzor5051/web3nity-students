@@ -1,54 +1,98 @@
-import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { getCurrentStudent, serviceClient } from '@/lib/auth';
-import { studentSlug, tbl, type WorkRow } from '@/lib/db';
-import AvatarUploader from './avatar-uploader';
-import ProfileEditor from './profile-editor';
-import WorksSection from './works-section';
+import type { Metadata } from 'next';
+import { requireStudent } from '@/lib/auth';
+import { toProjectCard } from '@/lib/catalog';
+import { studentSlug } from '@/lib/db';
+import { projectsOf } from '@/lib/queries';
+import { ProjectPreview, ProjectTags } from '@/lib/ui';
+import { deleteProject, toggleProject } from './actions';
+import { ConfirmButton } from './confirm-button';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Мой профиль' };
 
-export default async function ProfilePage() {
-  const me = await getCurrentStudent().catch(() => null);
-  if (!me) redirect('/login');
-
-  const { data: worksData } = await serviceClient()
-    .from(tbl('works'))
-    .select('*')
-    .eq('student_id', me.id)
-    .order('updated_at', { ascending: false });
-  const works = (worksData ?? []) as WorkRow[];
-
-  const slug = studentSlug(me);
+export default async function CabinetPage({ searchParams }: { searchParams: Promise<{ saved?: string }> }) {
+  const me = await requireStudent();
+  const { saved } = await searchParams;
+  const hasProfile = me.is_published;
+  const works = await projectsOf(me.id, true);
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-10 space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-        <AvatarUploader name={me.display_name} url={me.avatar_url} />
-        <div className="min-w-0 flex-1">
-          <h1 className="font-mono text-2xl">{me.display_name}</h1>
-          <div className="text-text2 text-sm">
-            {[me.niche, me.city || me.country].filter(Boolean).join(' · ') || 'Профиль ученика курса по вайб-кодингу'}
-          </div>
-          <div className="mt-3 flex gap-2 flex-wrap items-center">
-            {me.is_published ? (
-              <Link
-                href={`/s/${slug}`}
-                className="text-xs px-3 py-1 rounded-full border border-line hover:border-accent hover:text-accent"
-              >
-                Открыть публичную страницу
-              </Link>
-            ) : (
-              <span className="text-xs text-text3">
-                Сохраните профиль ниже — и откроется публичная страница.
-              </span>
-            )}
-          </div>
+    <>
+      <div className="pagehead cabinet-head">
+        <div>
+          <div className="eyebrow">Личный кабинет</div>
+          <h1>
+            Мой <span className="green">профиль</span>
+          </h1>
         </div>
+        <form action="/api/auth/logout" method="POST">
+          <button className="linkbtn" type="submit">
+            Выйти
+          </button>
+        </form>
       </div>
-
-      <ProfileEditor student={me} />
-      <WorksSection works={works} />
-    </div>
+      {saved === 'profile' ? (
+        <p className="notice" role="status">
+          Анкета сохранена.
+        </p>
+      ) : null}
+      <div className="routes">
+        <section className="route">
+          <h2>{hasProfile ? 'Моя анкета' : 'Расскажите о себе'}</h2>
+          <p>
+            {hasProfile
+              ? 'Анкета уже есть на платформе. Вы можете её обновить.'
+              : 'Создайте анкету, чтобы другие ученики могли познакомиться с вами.'}
+          </p>
+          <Link className="btn" href="/profile/edit">
+            {hasProfile ? 'Редактировать анкету' : 'Создать профиль'} →
+          </Link>
+          {hasProfile ? (
+            <Link className="back" style={{ margin: '18px 0 0' }} href={`/s/${studentSlug(me)}`}>
+              Посмотреть анкету →
+            </Link>
+          ) : null}
+        </section>
+        <section className="route">
+          <h2>Мои проекты</h2>
+          <p>Добавляйте новые проекты и обновляйте результаты.</p>
+          <Link className="btn action-blue" href="/profile/projects/new">
+            Добавить проект →
+          </Link>
+        </section>
+      </div>
+      {works.length ? (
+        <div className="grid cabinet-cards">
+          {works.map((w) => {
+            const p = toProjectCard(w, me);
+            return (
+              <article className="card" key={w.id}>
+                <ProjectPreview p={p} />
+                <ProjectTags p={p} />
+                <h3>{w.title}</h3>
+                {w.description ? <p className="clamp">{w.description}</p> : null}
+                {w.hidden_by_admin ? <p>Проект скрыт организатором.</p> : null}
+                <div className="actions">
+                  <Link href={`/w/${w.id}`}>Открыть</Link>
+                  <Link href={`/profile/projects/${w.id}`}>Редактировать</Link>
+                  <form action={toggleProject}>
+                    <input type="hidden" name="id" value={w.id} />
+                    <input type="hidden" name="next" value={String(!w.is_published)} />
+                    <button className="linkbtn" type="submit">
+                      {w.is_published ? 'Скрыть' : 'Показать'}
+                    </button>
+                  </form>
+                  <form action={deleteProject}>
+                    <input type="hidden" name="id" value={w.id} />
+                    <ConfirmButton message={`Удалить проект «${w.title}»? Это нельзя отменить.`}>Удалить</ConfirmButton>
+                  </form>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : null}
+    </>
   );
 }

@@ -15,6 +15,7 @@
     "spheres": "tsx scripts/spheres.ts",
     "audit:works": "tsx scripts/audit-works.ts",
     "spheres:dry": "tsx scripts/spheres.ts --dry",
+    "members": "tsx scripts/sync-members.ts",
     "enrich:status": "tsx scripts/enrich-status.ts",
     "enrich:status:dry": "tsx scripts/enrich-status.ts --dry",
     "screenshots": "tsx scripts/screenshots.ts",

@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { randomBytes } from 'crypto';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { tbl, type StudentRow } from './db';
@@ -46,15 +47,21 @@ export async function createAuthToken(): Promise<{ token: string; deepLink: stri
 export async function pollAuthToken(token: string): Promise<
   | { status: 'pending' }
   | { status: 'expired' }
+  | { status: 'denied' }
   | { status: 'confirmed'; sessionId: string; studentId: string }
 > {
   const svc = serviceClient();
   const { data } = await svc
     .from(tbl('web_auth_tokens'))
-    .select('token, student_id, confirmed_at, expires_at')
+    .select('token, student_id, confirmed_at, expires_at, denied_at')
     .eq('token', token)
     .maybeSingle();
   if (!data) return { status: 'expired' };
+  // Бот не нашёл человека среди учеников курса.
+  if (data.denied_at) {
+    await svc.from(tbl('web_auth_tokens')).delete().eq('token', token);
+    return { status: 'denied' };
+  }
   if (!data.confirmed_at) {
     if (new Date(data.expires_at) < new Date()) {
       // Просроченный неподтверждённый токен больше никогда не станет валидным —
@@ -78,7 +85,12 @@ export async function pollAuthToken(token: string): Promise<
   return { status: 'confirmed', sessionId, studentId: data.student_id };
 }
 
-/** Прочитать текущего залогиненного студента по cookie. */
+/**
+ * Прочитать текущего ученика по cookie. Возвращает null, если сессии нет,
+ * она истекла или человек больше не числится среди участников курса
+ * (организатор закрыл доступ). Это единственная точка проверки доступа:
+ * все страницы и действия с данными учеников идут через неё.
+ */
 export async function getCurrentStudent(): Promise<StudentRow | null> {
   const jar = await cookies();
   const sid = jar.get(SESSION_COOKIE)?.value;
@@ -99,7 +111,22 @@ export async function getCurrentStudent(): Promise<StudentRow | null> {
     .select('*')
     .eq('id', sess.student_id)
     .maybeSingle();
-  return (student as StudentRow | null) ?? null;
+  const me = (student as StudentRow | null) ?? null;
+  if (!me?.telegram_user_id) return null;
+  const { data: member } = await svc
+    .from(tbl('members'))
+    .select('telegram_user_id')
+    .eq('telegram_user_id', me.telegram_user_id)
+    .eq('revoked', false)
+    .maybeSingle();
+  return member ? me : null;
+}
+
+/** Для страниц: без подтверждённого ученика — на экран входа. */
+export async function requireStudent(): Promise<StudentRow> {
+  const me = await getCurrentStudent().catch(() => null);
+  if (!me) redirect('/login');
+  return me;
 }
 
 export async function destroySession(): Promise<void> {

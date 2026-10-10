@@ -1,197 +1,169 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { getCurrentStudent, serviceClient } from '@/lib/auth';
-import { tbl } from '@/lib/db';
-import { uploadAvatar, uploadWorkMedia, type MediaItem } from '@/lib/storage';
-import { assignSphere } from '@/lib/sphere';
+import { tbl, type StudentStatus, type WorkKind, type WorkStage } from '@/lib/db';
+import { REGIONS, STATUS_ORDER } from '@/lib/catalog';
+import { uploadAvatar, uploadWorkMedia } from '@/lib/storage';
 import { validateHttpUrl } from '@/lib/urls';
 
-const STATUSES = ['looking_for_clients', 'looking_for_partners', 'just_learning'];
+export type ActionResult = { ok: true } | { ok: false; error: string } | null;
 
-export type ActionResult = { ok: true } | { ok: false; error: string };
-
-// Потолок длины любого текстового поля: рассказ на 100 КБ ломает карточки и
-// OG-картинки, а лимит в форме обходится прямым запросом к server action.
+// Потолок длины любого текстового поля: прямой запрос к server action
+// обходит лимиты формы.
 const MAX_TEXT = 4000;
+const KINDS: WorkKind[] = ['site', 'bot', 'crm', 'other'];
+const STAGES: WorkStage[] = ['in_progress', 'done'];
 
-function text(form: FormData, key: string): string | null {
+function text(form: FormData, key: string, max = MAX_TEXT): string | null {
   const v = form.get(key);
-  return typeof v === 'string' && v.trim() ? v.trim().slice(0, MAX_TEXT) : null;
+  return typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null;
 }
 
-/** Сохранить поля профиля. */
-export async function updateProfile(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
-  const me = await getCurrentStudent().catch(() => null);
-  if (!me) return { ok: false, error: 'Сессия истекла — войдите заново.' };
+function file(form: FormData, key: string): File | null {
+  const f = form.get(key);
+  return f instanceof File && f.size > 0 ? f : null;
+}
 
-  const ageRaw = form.get('age');
-  const age =
-    typeof ageRaw === 'string' && ageRaw.trim() ? Math.floor(Number(ageRaw)) : null;
-  const statusRaw = form.get('status');
-  const status =
-    typeof statusRaw === 'string' && STATUSES.includes(statusRaw) ? statusRaw : null;
+const SESSION_GONE: ActionResult = { ok: false, error: 'Сессия истекла. Войдите заново и повторите.' };
+
+function touch(paths: string[]) {
+  for (const p of ['/', '/students', '/projects', '/profile', ...paths]) revalidatePath(p);
+}
+
+/** Создать или обновить свою анкету. Пишет только в запись текущего ученика. */
+export async function saveProfile(_prev: ActionResult, form: FormData): Promise<ActionResult> {
+  const me = await getCurrentStudent().catch(() => null);
+  if (!me) return SESSION_GONE;
+
+  const name = text(form, 'display_name', 120);
+  if (!name) return { ok: false, error: 'Укажите, как вас зовут.' };
+
+  const statuses = form
+    .getAll('statuses')
+    .filter((x): x is StudentStatus => typeof x === 'string' && STATUS_ORDER.includes(x as StudentStatus));
+  const region = text(form, 'region');
 
   const patch: Record<string, unknown> = {
-    display_name: text(form, 'display_name') ?? me.display_name,
-    niche: text(form, 'niche'),
-    city: text(form, 'city'),
-    country: text(form, 'country'),
+    display_name: name,
+    city: text(form, 'city', 120),
+    country: text(form, 'country', 120),
+    region: region && REGIONS.includes(region) ? region : null,
+    sphere: text(form, 'sphere', 80),
+    niche: text(form, 'niche', 300),
     bio: text(form, 'bio'),
+    expectations: text(form, 'expectations'),
     goal: text(form, 'goal'),
-    expertise: text(form, 'expertise'),
-    hobbies: text(form, 'hobbies'),
-    age: age && age > 10 && age < 100 ? age : null,
-    status,
-    // Профиль виден всем по умолчанию и скрыть его нельзя (политика витрины).
+    statuses,
+    status: statuses[0] ?? null,
+    // telegram_username не редактируется: он приходит из Telegram при входе,
+    // по нему строится адрес профиля, и чужой ник вписать нельзя.
     is_published: true,
-    // Отметка «правил сам»: с этого момента импорт профиль не трогает.
+    // Отметка «правил сам»: импорт больше не перезаписывает анкету.
     self_edited_at: new Date().toISOString(),
   };
 
-  // Авто-сфера: определяем из ниши/профиля одну из уже существующих сфер, чтобы
-  // ученик сразу попал под нужный чип «Сфера». Fail-soft — любая осечка не
-  // мешает сохранению (сфера просто остаётся прежней).
-  try {
-    const { data: rows } = await serviceClient()
-      .from(tbl('students'))
-      .select('sphere')
-      .eq('is_published', true)
-      .not('sphere', 'is', null);
-    const spheres = [...new Set((rows ?? []).map((r) => (r as { sphere: string }).sphere).filter(Boolean))];
-    const sphere = await assignSphere(
-      { niche: patch.niche as string | null, bio: patch.bio as string | null, goal: patch.goal as string | null, expertise: patch.expertise as string | null },
-      spheres,
-    );
-    if (sphere) patch.sphere = sphere;
-  } catch {
-    // оставляем сферу как есть
+  const photo = file(form, 'photo');
+  if (photo) {
+    const url = await uploadAvatar(me.id, photo);
+    if (!url) return { ok: false, error: 'Фото не загрузилось: подойдут JPG, PNG или WebP до 5 МБ.' };
+    patch.avatar_url = url;
   }
 
   const { error } = await serviceClient().from(tbl('students')).update(patch).eq('id', me.id);
-  if (error) return { ok: false, error: error.message };
-  revalidatePath('/profile');
-  return { ok: true };
+  if (error) return { ok: false, error: 'Не удалось сохранить анкету. Попробуйте ещё раз.' };
+  touch(['/profile/edit']);
+  redirect('/profile?saved=profile');
 }
 
-/** Загрузить / поменять аватар профиля. */
-export async function updateAvatar(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
+/** Добавить проект или обновить свой. Автор — всегда текущий ученик. */
+export async function saveProject(_prev: ActionResult, form: FormData): Promise<ActionResult> {
   const me = await getCurrentStudent().catch(() => null);
-  if (!me) return { ok: false, error: 'Сессия истекла — войдите заново.' };
+  if (!me) return SESSION_GONE;
 
-  const file = form.get('avatar');
-  if (!(file instanceof File) || file.size === 0) {
-    return { ok: false, error: 'Выберите файл с фото.' };
-  }
-  const url = await uploadAvatar(me.id, file);
-  if (!url) return { ok: false, error: 'Не удалось загрузить фото (только JPG/PNG/WebP до 5 МБ).' };
-
-  const { error } = await serviceClient()
-    .from(tbl('students'))
-    .update({ avatar_url: url })
-    .eq('id', me.id);
-  if (error) return { ok: false, error: error.message };
-  revalidatePath('/profile');
-  revalidatePath('/');
-  return { ok: true };
-}
-
-/** Добавить работу с загрузкой файлов. */
-export async function createWork(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
-  const me = await getCurrentStudent().catch(() => null);
-  if (!me) return { ok: false, error: 'Сессия истекла — войдите заново.' };
-
-  const title = text(form, 'title');
-  if (!title) return { ok: false, error: 'Укажите название проекта.' };
-
+  const id = text(form, 'id', 64);
+  const title = text(form, 'title', 160);
   const description = text(form, 'description');
-  const tags = (text(form, 'tags') ?? '')
-    .split(',')
-    .map((t) => t.trim().toLowerCase())
-    .filter((t) => t.length > 0 && t.length < 40)
-    .slice(0, 8);
+  if (!title) return { ok: false, error: 'Укажите название проекта.' };
+  if (!description) return { ok: false, error: 'Опишите, какую задачу решает проект и для кого.' };
 
-  const files = form
-    .getAll('files')
-    .filter((f): f is File => f instanceof File && f.size > 0);
-  const media: MediaItem[] = [];
-  for (const f of files.slice(0, 10)) {
-    const item = await uploadWorkMedia(me.id, f);
-    if (item) media.push(item);
-  }
+  const kindRaw = text(form, 'kind');
+  const stageRaw = text(form, 'stage');
+  const live = validateHttpUrl(text(form, 'live_url', 500), 'Ссылка на проект');
+  if (!live.ok) return { ok: false, error: live.error };
 
-  const { error } = await serviceClient().from(tbl('works')).insert({
-    student_id: me.id,
+  const patch: Record<string, unknown> = {
     title,
     description,
-    tags,
-    media,
-    is_published: true,
-    posted_at: new Date().toISOString(),
-  });
-  if (error) return { ok: false, error: error.message };
-  revalidatePath('/profile');
-  return { ok: true };
+    kind: KINDS.includes(kindRaw as WorkKind) ? kindRaw : null,
+    stage: STAGES.includes(stageRaw as WorkStage) ? stageRaw : 'in_progress',
+    live_url: live.value,
+    features: text(form, 'features'),
+    feedback_request: text(form, 'feedback_request'),
+  };
+
+  const cover = file(form, 'cover');
+  if (cover) {
+    if (!cover.type.startsWith('image/')) return { ok: false, error: 'Обложка: подойдёт картинка JPG, PNG или WebP.' };
+    const item = await uploadWorkMedia(me.id, cover);
+    if (!item) return { ok: false, error: 'Обложка не загрузилась: картинка до 15 МБ.' };
+    patch.media = [item];
+    // Своя обложка важнее автоматического скриншота сайта.
+    patch.screenshot_path = null;
+  }
+
+  const svc = serviceClient();
+  let workId = id;
+  if (id) {
+    const { data, error } = await svc
+      .from(tbl('works'))
+      .update(patch)
+      .eq('id', id)
+      .eq('student_id', me.id)
+      .select('id')
+      .maybeSingle();
+    if (error || !data) return { ok: false, error: 'Не удалось сохранить проект. Попробуйте ещё раз.' };
+  } else {
+    const { data, error } = await svc
+      .from(tbl('works'))
+      .insert({
+        ...patch,
+        student_id: me.id,
+        media: patch.media ?? [],
+        tags: [],
+        is_published: true,
+        posted_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+    if (error || !data) return { ok: false, error: 'Не удалось опубликовать проект. Попробуйте ещё раз.' };
+    workId = data.id as string;
+  }
+  touch([`/w/${workId}`]);
+  redirect(`/w/${workId}`);
 }
 
-/** Удалить работу (только свою). */
-export async function deleteWork(form: FormData): Promise<void> {
+/** Скрыть / снова показать свой проект. */
+export async function toggleProject(form: FormData): Promise<void> {
   const me = await getCurrentStudent().catch(() => null);
   if (!me) return;
-  const workId = form.get('workId');
-  if (typeof workId !== 'string') return;
+  const id = form.get('id');
+  if (typeof id !== 'string') return;
   await serviceClient()
     .from(tbl('works'))
-    .delete()
-    .eq('id', workId)
+    .update({ is_published: form.get('next') === 'true' })
+    .eq('id', id)
     .eq('student_id', me.id);
-  revalidatePath('/profile');
+  touch([`/w/${id}`]);
 }
 
-/** Показать / скрыть работу на витрине (только свою). */
-export async function toggleWork(form: FormData): Promise<void> {
+/** Удалить свой проект. */
+export async function deleteProject(form: FormData): Promise<void> {
   const me = await getCurrentStudent().catch(() => null);
   if (!me) return;
-  const workId = form.get('workId');
-  const next = form.get('next') === 'true';
-  if (typeof workId !== 'string') return;
-  // Ученик может публиковать только свои работы — фильтр по student_id
-  // делает чужой workId no-op вместо изменения чужой записи.
-  await serviceClient()
-    .from(tbl('works'))
-    .update({ is_published: next })
-    .eq('id', workId)
-    .eq('student_id', me.id);
-  revalidatePath('/profile');
-  revalidatePath('/');
-}
-
-/**
- * Сохранить ссылку на сайт и репозиторий (только своя работа). Пустая
- * строка -> null. Принимаем только http/https — иначе можно сохранить
- * javascript: или другую опасную схему, которая потом станет href на
- * публичной странице работы.
- */
-export async function saveWorkLinks(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
-  const me = await getCurrentStudent().catch(() => null);
-  if (!me) return { ok: false, error: 'Сессия истекла — войдите заново.' };
-  const workId = form.get('workId');
-  if (typeof workId !== 'string') return { ok: false, error: 'Не удалось определить проект.' };
-
-  const live = validateHttpUrl(text(form, 'live_url'), 'Ссылка на сайт');
-  if (!live.ok) return { ok: false, error: live.error };
-  const repo = validateHttpUrl(text(form, 'repo_url'), 'Репозиторий');
-  if (!repo.ok) return { ok: false, error: repo.error };
-
-  // Ученик может публиковать только свои работы — фильтр по student_id
-  // делает чужой workId no-op вместо изменения чужой записи.
-  const { error } = await serviceClient()
-    .from(tbl('works'))
-    .update({ live_url: live.value, repo_url: repo.value })
-    .eq('id', workId)
-    .eq('student_id', me.id);
-  if (error) return { ok: false, error: error.message };
-  revalidatePath('/profile');
-  revalidatePath('/');
-  return { ok: true };
+  const id = form.get('id');
+  if (typeof id !== 'string') return;
+  await serviceClient().from(tbl('works')).delete().eq('id', id).eq('student_id', me.id);
+  touch([]);
 }
