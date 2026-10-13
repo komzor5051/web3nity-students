@@ -8,17 +8,12 @@ import { BASE_SPHERES, toProjectCard, toStudentCard, type ProjectCardData } from
 import { canonicalSphere } from './text';
 
 export async function publishedStudents(): Promise<StudentRow[]> {
-  const { data, error } = await serviceClient()
-    .from(tbl('students'))
-    .select('*')
-    .eq('is_published', true)
-    .limit(1000);
+  // Два независимых запроса — параллельно: база в Сеуле, каждый круг заметен.
+  const [{ data, error }, { data: members, error: mErr }] = await Promise.all([
+    serviceClient().from(tbl('students')).select('*').eq('is_published', true).limit(1000),
+    serviceClient().from(tbl('members')).select('telegram_user_id').eq('revoked', false).limit(5000),
+  ]);
   if (error) throw new Error(`students: ${error.message}`);
-  const { data: members, error: mErr } = await serviceClient()
-    .from(tbl('members'))
-    .select('telegram_user_id')
-    .eq('revoked', false)
-    .limit(5000);
   if (mErr) throw new Error(`members: ${mErr.message}`);
   const ids = new Set((members ?? []).map((m) => Number(m.telegram_user_id)));
   // Анкета из импорта чатов — ученик по определению. Анкета, заведённая

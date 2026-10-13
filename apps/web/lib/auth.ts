@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { randomBytes } from 'crypto';
@@ -106,7 +107,8 @@ export async function pollAuthToken(token: string): Promise<
  * (организатор закрыл доступ). Это единственная точка проверки доступа:
  * все страницы и действия с данными учеников идут через неё.
  */
-export async function getCurrentStudent(): Promise<StudentRow | null> {
+// cache(): шапка и страница спрашивают ученика в одном запросе — ходим в базу один раз.
+export const getCurrentStudent = cache(async (): Promise<StudentRow | null> => {
   const jar = await cookies();
   const sid = jar.get(SESSION_COOKIE)?.value;
   if (!sid) return null;
@@ -129,7 +131,7 @@ export async function getCurrentStudent(): Promise<StudentRow | null> {
   const me = (student as StudentRow | null) ?? null;
   if (!me?.telegram_user_id) return null;
   return (await isMember(me.telegram_user_id)) ? me : null;
-}
+});
 
 /** Ученик ли это: Telegram ID в списке участников курса, доступ не закрыт. */
 export async function isMember(telegramUserId: number): Promise<boolean> {
