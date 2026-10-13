@@ -72,6 +72,9 @@ async function main(): Promise<void> {
 
   for (const work of works) {
     const liveUrl = work.live_url as string;
+    // Артефакты Claude без входа отдают «Page not found» — такой снимок хуже
+    // заглушки. Карточка нарисует макет, ссылка на артефакт останется.
+    if (/^https?:\/\/(www\.)?claude\.ai\//i.test(liveUrl)) continue;
 
     try {
       await assertUrlSafeToFetch(liveUrl);
