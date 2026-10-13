@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   description: DESCRIPTION,
   // Платформа закрыта для учеников: в поиске ей делать нечего.
   robots: { index: false, follow: false },
-  openGraph: { title: TITLE, description: DESCRIPTION, type: 'website', images: [{ url: '/og.png', width: 1200, height: 630 }] },
+  openGraph: { title: TITLE, description: DESCRIPTION, type: 'website', images: [{ url: '/og.png?v=2', width: 1200, height: 630 }] },
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

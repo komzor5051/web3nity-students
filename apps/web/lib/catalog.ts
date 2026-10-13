@@ -13,13 +13,18 @@ export const STATUS_LABEL: Record<StudentStatus, string> = {
 };
 export const STATUS_ORDER: StudentStatus[] = ['just_learning', 'looking_for_partners', 'looking_for_clients'];
 
+// Набор типов собран по тому, что ученики реально выкладывают в SHOW CASE
+// и ХАКАТОН: больше всего сайтов, затем сервисы вроде калькуляторов и трекеров.
 export const KIND_LABEL: Record<WorkKind, string> = {
-  site: 'Сайт',
-  bot: 'AI-бот',
-  crm: 'Мини-CRM',
+  site: 'Сайт или лендинг',
+  app: 'Веб-сервис',
+  bot: 'Telegram-бот',
+  agent: 'AI-ассистент',
+  crm: 'Мини-CRM и учёт',
+  automation: 'Автоматизация',
   other: 'Другое',
 };
-export const KIND_ORDER: WorkKind[] = ['site', 'bot', 'crm', 'other'];
+export const KIND_ORDER: WorkKind[] = ['site', 'app', 'bot', 'agent', 'crm', 'automation', 'other'];
 
 export const STAGE_LABEL: Record<WorkStage, string> = {
   in_progress: 'В работе',
@@ -31,7 +36,7 @@ export const BASE_SPHERES = [
   'Маркетинг', 'IT', 'Образование', 'Недвижимость', 'Здоровье',
   'Производство и строительство', 'Торговля и e-commerce', 'Финансы',
   'Юриспруденция', 'Туризм', 'Красота', 'Культура', 'Медиа',
-  'Услуги и сервис', 'Дизайн',
+  'Услуги и сервис', 'Дизайн', 'Консалтинг', 'Логистика', 'Психология',
 ];
 
 export const REGIONS = ['СНГ', 'Европа', 'Ближний Восток', 'Азия', 'Америка', 'Африка', 'Океания'];

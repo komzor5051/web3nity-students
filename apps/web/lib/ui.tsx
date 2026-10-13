@@ -2,6 +2,7 @@
  * Единый набор карточек платформы. Разметка и классы — из прототипа
  * (styles.css), поэтому каталог, профиль и кабинет выглядят одинаково.
  */
+import Image from 'next/image';
 import Link from 'next/link';
 import type { StudentStatus } from './db';
 import { KIND_LABEL, STAGE_LABEL, STATUS_LABEL, type ProjectCardData, type StudentCardData } from './catalog';
@@ -73,8 +74,9 @@ export function ProjectPreview({ p }: { p: Pick<ProjectCardData, 'title' | 'kind
   if (p.imageUrl) {
     return (
       <div className="preview shot">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={p.imageUrl} alt={`Предпросмотр: ${p.title}`} loading="lazy" />
+        {/* Скриншоты в хранилище — PNG 1280×800 по мегабайту. Next отдаёт их
+            сжатыми под ширину карточки, иначе каталог грузит десятки мегабайт. */}
+        <Image src={p.imageUrl} alt={`Предпросмотр: ${p.title}`} fill sizes="(max-width: 480px) 100vw, (max-width: 760px) 50vw, 380px" />
       </div>
     );
   }
@@ -83,14 +85,14 @@ export function ProjectPreview({ p }: { p: Pick<ProjectCardData, 'title' | 'kind
       <div className="miniapp">
         {p.kind ? KIND_LABEL[p.kind] : 'Проект'}
         <b>{p.title}</b>
-        {p.kind === 'crm' ? (
+        {p.kind === 'crm' || p.kind === 'automation' ? (
           <div className="bars">
             <i style={{ height: '35%' }} />
             <i style={{ height: '70%' }} />
             <i style={{ height: '50%' }} />
             <i style={{ height: '90%' }} />
           </div>
-        ) : p.kind === 'bot' ? (
+        ) : p.kind === 'bot' || p.kind === 'agent' ? (
           <>
             <div className="miniline short" />
             <div className="miniline" style={{ marginLeft: '30%' }} />

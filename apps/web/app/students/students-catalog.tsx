@@ -49,27 +49,27 @@ export default function StudentsCatalog({ items, spheres }: { items: StudentCard
           onChange={(e) => setQ(e.target.value)}
         />
         <select aria-label="Статус" value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">Статус</option>
+          <option value="">Все статусы</option>
           {STATUS_ORDER.map((s) => (
             <option key={s} value={s}>
               {STATUS_LABEL[s]}
             </option>
           ))}
-          <option value={NONE}>Не указано</option>
+          <option value={NONE}>Статус не указан</option>
         </select>
         <select aria-label="Сфера деятельности" value={sphere} onChange={(e) => setSphere(e.target.value)}>
-          <option value="">Сфера деятельности</option>
+          <option value="">Все сферы</option>
           {spheres.map((s) => (
             <option key={s}>{s}</option>
           ))}
-          <option value={NONE}>Не указано</option>
+          <option value={NONE}>Сфера не указана</option>
         </select>
         <select aria-label="Регион" value={region} onChange={(e) => setRegion(e.target.value)}>
           <option value="">Все регионы</option>
           {REGIONS.map((r) => (
             <option key={r}>{r}</option>
           ))}
-          <option value={NONE}>Не указано</option>
+          <option value={NONE}>Регион не указан</option>
         </select>
       </div>
       <Results

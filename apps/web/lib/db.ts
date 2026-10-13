@@ -69,7 +69,7 @@ export type WorkRow = {
   hidden_by_admin: boolean;
 };
 
-export type WorkKind = 'site' | 'bot' | 'crm' | 'other';
+export type WorkKind = 'site' | 'app' | 'bot' | 'agent' | 'crm' | 'automation' | 'other';
 export type WorkStage = 'in_progress' | 'done';
 
 /** Транслит для slug, если у студента нет telegram_username. */

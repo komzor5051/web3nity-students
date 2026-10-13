@@ -13,7 +13,7 @@ export type ActionResult = { ok: true } | { ok: false; error: string } | null;
 // Потолок длины любого текстового поля: прямой запрос к server action
 // обходит лимиты формы.
 const MAX_TEXT = 4000;
-const KINDS: WorkKind[] = ['site', 'bot', 'crm', 'other'];
+const KINDS: WorkKind[] = ['site', 'app', 'bot', 'agent', 'crm', 'automation', 'other'];
 const STAGES: WorkStage[] = ['in_progress', 'done'];
 
 function text(form: FormData, key: string, max = MAX_TEXT): string | null {

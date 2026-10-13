@@ -48,3 +48,13 @@ describe('extractUrls', () => {
     expect(extractUrls('Просто рассказываю как дела').liveUrl).toBeNull();
   });
 });
+
+describe('isNotAWorkUrl: Telegram', () => {
+  it('бот ученика — работа, личный контакт — нет', async () => {
+    const { isNotAWorkUrl } = await import('../src/urls.js');
+    expect(isNotAWorkUrl('https://t.me/neiropult_bot')).toBe(false);
+    expect(isNotAWorkUrl('https://t.me/NewMartRuBot?start=1')).toBe(false);
+    expect(isNotAWorkUrl('https://t.me/lyaminvl')).toBe(true);
+    expect(isNotAWorkUrl('https://t.me/+AbCdEf')).toBe(true);
+  });
+});

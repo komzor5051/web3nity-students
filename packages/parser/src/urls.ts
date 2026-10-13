@@ -40,7 +40,20 @@ export function isNotAWorkUrl(url: string): boolean {
   const host = hostOf(url);
   if (!host) return true;
   if (host.startsWith('id-preview--')) return true;
+  if (isTelegramBotUrl(url)) return false;
   return NOT_A_WORK_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+}
+
+/** t.me/имя_bot — бот ученика, это работа, а не контакт. Ник бота по правилам Telegram кончается на «bot». */
+export function isTelegramBotUrl(url: string): boolean {
+  const host = hostOf(url);
+  if (host !== 't.me' && host !== 'telegram.me') return false;
+  try {
+    const name = new URL(url).pathname.split('/').filter(Boolean)[0] ?? '';
+    return /^[A-Za-z0-9_]{2,29}bot$/i.test(name);
+  } catch {
+    return false;
+  }
 }
 
 /** Убирает знаки препинания, прилипшие к концу ссылки в живом тексте. */
