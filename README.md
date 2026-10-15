@@ -104,7 +104,7 @@ npm run dev --workspace=@web3nity/bot
 Деплой на Railway:
 1. New Service → Deploy from repo / CLI (`railway up`).
 2. Settings → Root directory: `/` (корень монорепо), Build → Dockerfile path: `apps/bot/Dockerfile`.
-3. Variables: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (после шага 5 выше), `COHORT`, `SITE_URL`, при необходимости `SUPABASE_TABLE_PREFIX` / `SUPABASE_BUCKET_PREFIX`.
+3. Variables: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (после шага 5 выше), `SITE_URL`, при необходимости `SUPABASE_TABLE_PREFIX` / `SUPABASE_BUCKET_PREFIX`.
 4. Long-polling, public URL не нужен.
 
 Что бот делает в группе (фоновый режим):
