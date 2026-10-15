@@ -6,6 +6,7 @@ import { pickLargestPhotoFileId, ensureAvatar, type AvatarCtx } from '../src/ava
 function student(over: Partial<Student> = {}): Student {
   return {
     id: 'stud-1',
+    course: 'vibecoding',
     telegram_user_id: 42,
     telegram_username: 'alice',
     display_name: 'Alice',

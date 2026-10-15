@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { requireStudent } from '@/lib/auth';
+import { requireCourse } from '@/lib/courses';
 import { REGIONS, STATUS_LABEL, STATUS_ORDER, studentStatuses } from '@/lib/catalog';
 import { publishedStudents, sphereOptions } from '@/lib/queries';
 import { canonicalSphere, cleanBio, tgHandle } from '@/lib/text';
@@ -11,9 +12,10 @@ import { ActionForm, SubmitButton } from '../action-form';
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Моя анкета' };
 
-export default async function EditProfilePage() {
-  const me = await requireStudent();
-  const spheres = sphereOptions(await publishedStudents());
+export default async function EditProfilePage({ params }: { params: Promise<{ course: string }> }) {
+  const course = requireCourse((await params).course);
+  const me = await requireStudent(course.id);
+  const spheres = sphereOptions(await publishedStudents(course.id));
   const sphere = canonicalSphere(me.sphere);
   const statuses = studentStatuses(me);
   const tg = tgHandle(me.telegram_username);
@@ -21,7 +23,7 @@ export default async function EditProfilePage() {
 
   return (
     <div className="form">
-      <Link className="back" href="/profile">
+      <Link className="back" href={`/${course.id}/profile`}>
         ← Мой профиль
       </Link>
       <div className="eyebrow">Личный кабинет</div>
@@ -30,6 +32,7 @@ export default async function EditProfilePage() {
       </h1>
       <p className="lead">Помогите другим ученикам познакомиться с вами.</p>
       <ActionForm action={saveProfile} id="profile-form">
+        <input type="hidden" name="course" value={course.id} />
         <div className="form-group">
           <label htmlFor="display_name">Как вас зовут?</label>
           <input id="display_name" name="display_name" defaultValue={me.display_name} required maxLength={120} autoComplete="name" />
@@ -88,7 +91,7 @@ export default async function EditProfilePage() {
           <textarea id="bio" name="bio" defaultValue={cleanBio(me.bio) ?? ''} maxLength={4000} />
         </div>
         <div className="form-group">
-          <label htmlFor="expectations">Для чего пришли на практикум и чего ожидаете?</label>
+          <label htmlFor="expectations">Для чего пришли на курс и чего ожидаете?</label>
           <textarea id="expectations" name="expectations" defaultValue={me.expectations ?? ''} maxLength={4000} />
         </div>
         <div className="form-group">
@@ -114,7 +117,7 @@ export default async function EditProfilePage() {
         <p className="demo">Анкета и контакты доступны только ученикам платформы.</p>
         <SubmitButton pending="Сохраняем…">{isNew ? 'Создать профиль →' : 'Сохранить изменения →'}</SubmitButton>
       </ActionForm>
-      <Link href="/profile/projects/new" className="back" style={{ marginTop: 24 }}>
+      <Link href={`/${course.id}/profile/projects/new`} className="back" style={{ marginTop: 24 }}>
         Добавить проект →
       </Link>
     </div>

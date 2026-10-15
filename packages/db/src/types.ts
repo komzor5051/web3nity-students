@@ -12,8 +12,12 @@ export type MediaItem =
   | { type: 'pdf'; url: string; caption?: string }
   | { type: 'link'; url: string; caption?: string };
 
+import type { CourseId } from './courses.js';
+
 export interface Student {
   id: string;
+  /** Курс (обучение): у человека на каждом курсе своя анкета. */
+  course: CourseId;
   telegram_user_id: number | null;
   telegram_username: string | null;
   display_name: string;
@@ -35,6 +39,18 @@ export interface Student {
   import_key: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** Участник курса: доступ к платформе. Первичный ключ — (telegram_user_id, course). */
+export interface Member {
+  telegram_user_id: number;
+  course: CourseId;
+  username: string | null;
+  display_name: string | null;
+  chats: number[];
+  source: 'chat' | 'manual';
+  revoked: boolean;
+  added_at: string;
 }
 
 export interface Work {

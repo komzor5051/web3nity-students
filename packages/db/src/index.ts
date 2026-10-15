@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 export * from './types.js';
+export * from './courses.js';
 
 let _service: SupabaseClient | null = null;
 let _anon: SupabaseClient | null = null;

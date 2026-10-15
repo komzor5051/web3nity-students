@@ -44,7 +44,7 @@ import {
   type TopicKind,
   type FailedBatch,
 } from '@vibe/parser';
-import { getServiceClient, tbl } from '@vibe/db';
+import { courseOfChat, getServiceClient, tbl, type CourseId } from '@vibe/db';
 
 interface Args {
   dumpFile: string;
@@ -67,6 +67,8 @@ function parseArgs(argv: string[]): Args {
 
 export interface StudentPayload {
   display_name: string;
+  /** Курс чата-источника. Импорт пока ведёт только чаты вайбкодинга. */
+  course: CourseId;
   cohort: string;
   import_key: string;
   telegram_username: string | null;
@@ -126,6 +128,7 @@ export function buildStudentPayload(input: {
   const { chatId, authorName, authorUsername, rootMessageId, intro, importKey } = input;
   return {
     display_name: intro.name?.trim() || authorName.trim(),
+    course: courseOfChat(chatId) ?? 'vibecoding',
     cohort: cohortOf(chatId),
     import_key: importKey ?? normalizeAuthorKey(authorName),
     telegram_username: authorUsername,
@@ -589,9 +592,10 @@ export async function mergeDuplicateProfiles(db: SupabaseClient): Promise<number
     .not('telegram_username', 'is', null);
   if (error) throw error;
 
+  // Дубли ищем внутри курса: человек на двух курсах законно имеет две анкеты.
   const groups = new Map<string, Record<string, unknown>[]>();
   for (const row of (data ?? []) as Record<string, unknown>[]) {
-    const key = String(row.telegram_username).toLowerCase();
+    const key = `${row.course ?? 'vibecoding'}:${String(row.telegram_username).toLowerCase()}`;
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
 
@@ -703,7 +707,8 @@ async function upsertStudent(
   db: SupabaseClient,
   payload: StudentPayload,
 ): Promise<string> {
-  const { cohort, import_key, ...rest } = payload;
+  // course пишем только при создании: у существующей анкеты курс не меняем.
+  const { cohort, import_key, course, ...rest } = payload;
   const { data: existing, error: selectError } = await db
     .from(tbl('students'))
     .select('id, self_edited_at')
@@ -723,11 +728,17 @@ async function upsertStudent(
 
   const { data, error } = await db
     .from(tbl('students'))
-    .insert({ cohort, import_key, ...rest })
+    .insert({ cohort, import_key, course, ...rest })
     .select('id')
     .single();
   if (error) throw error;
   return data!.id as string;
+}
+
+/** Курс по source_message_id вида tg:<chat>:<message>; чат вне курсов — вайбкодинг, как и до разделения. */
+function courseOfSource(sourceMessageId: string): CourseId {
+  const chatId = Number(/^tg:(-?\d+):/.exec(sourceMessageId)?.[1]);
+  return courseOfChat(chatId) ?? 'vibecoding';
 }
 
 /** Работа пришла раньше intro автора (или его вообще не было) — заводим минимальный профиль. */
@@ -750,6 +761,7 @@ async function ensureStudentStub(
     .from(tbl('students'))
     .insert({
       cohort,
+      course: courseOfSource(sourceMessageId),
       import_key: importKey,
       display_name: importKey,
       telegram_username: null,

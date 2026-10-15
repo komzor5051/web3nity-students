@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
     if (result.status === 'confirmed') {
       const jar = await cookies();
       setSessionCookie(jar, result.sessionId);
+      // '/' сам уводит в первый курс ученика (vibecoding первым).
       return redirectTo('/');
     }
     if (result.status === 'denied') return redirectTo('/login?denied=1');

@@ -4,6 +4,7 @@
  */
 import Image from 'next/image';
 import Link from 'next/link';
+import type { CourseId } from '@vibe/db/courses';
 import type { StudentStatus } from './db';
 import { KIND_LABEL, STAGE_LABEL, STATUS_LABEL, type ProjectCardData, type StudentCardData } from './catalog';
 
@@ -42,7 +43,7 @@ export function StatusTags({ statuses }: { statuses: StudentStatus[] }) {
   );
 }
 
-export function StudentCard({ s }: { s: StudentCardData }) {
+export function StudentCard({ s, course }: { s: StudentCardData; course: CourseId }) {
   const about = s.niche ?? s.about;
   return (
     <article className="card">
@@ -58,7 +59,7 @@ export function StudentCard({ s }: { s: StudentCardData }) {
           <StatusTags statuses={s.statuses} />
         </div>
       ) : null}
-      <Link className="cardlink" href={`/s/${s.slug}`}>
+      <Link className="cardlink" href={`/${course}/s/${s.slug}`}>
         Открыть профиль <span aria-hidden="true">→</span>
       </Link>
     </article>
@@ -121,7 +122,7 @@ export function ProjectTags({ p }: { p: Pick<ProjectCardData, 'kind' | 'stage' |
   );
 }
 
-export function ProjectCard({ p, showAuthor = true }: { p: ProjectCardData; showAuthor?: boolean }) {
+export function ProjectCard({ p, course, showAuthor = true }: { p: ProjectCardData; course: CourseId; showAuthor?: boolean }) {
   return (
     <article className="card">
       <ProjectPreview p={p} />
@@ -129,7 +130,7 @@ export function ProjectCard({ p, showAuthor = true }: { p: ProjectCardData; show
       <h3>{p.title}</h3>
       {p.description ? <p className="clamp">{p.description}</p> : null}
       {showAuthor ? <span className="location">{p.authorName}</span> : null}
-      <Link className="cardlink" href={`/w/${p.id}`}>
+      <Link className="cardlink" href={`/${course}/w/${p.id}`}>
         Подробнее о проекте <span aria-hidden="true">→</span>
       </Link>
     </article>

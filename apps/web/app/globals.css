@@ -61,3 +61,6 @@ nav .account.signed{background:var(--ink);border-color:var(--ink);color:#fff}
 .form .current-photo{display:flex;align-items:center;gap:12px;margin-top:6px;font-size:13px;color:var(--muted)}
 .form .current-photo .avatar{width:44px;height:44px;font-size:16px}
 .hint{font-size:12px;color:var(--muted);margin:4px 0 0}
+.course-switch{display:flex;gap:2px;padding:3px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.course-switch a{padding:5px 12px;border-radius:7px;color:var(--muted);white-space:nowrap}
+.course-switch a[aria-current=page]{background:var(--ink);color:#fff}

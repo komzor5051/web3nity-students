@@ -12,10 +12,14 @@ export function tbl(name: string): string {
   return TABLE_PREFIX + name;
 }
 
+import type { CourseId } from '@vibe/db/courses';
+
 export type StudentStatus = 'looking_for_clients' | 'looking_for_partners' | 'just_learning';
 
 export type StudentRow = {
   id: string;
+  /** Курс: анкета принадлежит одному курсу, базы курсов не смешиваются. */
+  course: CourseId;
   display_name: string;
   avatar_url: string | null;
   city: string | null;
@@ -32,7 +36,7 @@ export type StudentRow = {
   statuses: StudentStatus[];
   /** Регион, выбранный учеником. null — вычисляется из города/страны. */
   region: string | null;
-  /** «Для чего пришли на практикум и чего ожидаете». */
+  /** «Для чего пришли на курс и чего ожидаете». */
   expectations: string | null;
   telegram_user_id: number | null;
   telegram_username: string | null;

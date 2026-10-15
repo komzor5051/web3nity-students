@@ -9,8 +9,7 @@ export default function NotFound() {
       </h1>
       <p className="lead">Анкета или проект удалены, скрыты или ссылка набрана с ошибкой.</p>
       <div className="actions" style={{ justifyContent: 'center' }}>
-        <Link className="btn" href="/students">Ученики →</Link>
-        <Link className="btn action-blue" href="/projects">Проекты →</Link>
+        <Link className="btn" href="/">На главную →</Link>
       </div>
     </div>
   );

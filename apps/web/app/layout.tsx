@@ -1,11 +1,12 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { getCurrentStudent } from '@/lib/auth';
+import { getMemberCourses } from '@/lib/auth';
+import { getCourse } from '@/lib/courses';
 import { MainShell, SiteNav } from './site-nav';
 
-const TITLE = 'Web3nity School — Практикум «Вайбкодинг»';
-const DESCRIPTION = 'Платформа учеников практикума «Вайбкодинг» Web3nity School: знакомства и проекты участников.';
+const TITLE = 'Web3nity School — Платформа учеников';
+const DESCRIPTION = 'Платформа учеников Web3nity School: знакомства и проекты участников курсов.';
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://vibecoding-students.vercel.app'),
@@ -17,7 +18,12 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const me = await getCurrentStudent().catch(() => null);
+  // Шапка показывает только курсы, в которых человек числится учеником.
+  const courseIds = await getMemberCourses().catch(() => []);
+  const courses = courseIds.flatMap((id) => {
+    const c = getCourse(id);
+    return c ? [{ id: c.id, title: c.title }] : [];
+  });
 
   return (
     <html lang="ru">
@@ -33,13 +39,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <a href="#content" className="skip-link">К содержанию</a>
         <header>
           <Link href="/" className="logo" aria-label="Web3nity School — на главную">
-            <i aria-hidden="true" /> Web3nity School<span>Практикум «Вайбкодинг»</span>
+            <i aria-hidden="true" /> Web3nity School<span>Платформа учеников</span>
           </Link>
-          {me ? <SiteNav /> : null}
+          {courses.length ? <SiteNav courses={courses} /> : null}
         </header>
         <MainShell>{children}</MainShell>
         <footer>
-          <span>Web3nity School · Практикум «Вайбкодинг»</span>
+          <span>Web3nity School</span>
           <span>Ученики и их проекты</span>
         </footer>
       </body>

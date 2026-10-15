@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { requireStudent } from '@/lib/auth';
+import { requireCourse } from '@/lib/courses';
 import { toProjectCard } from '@/lib/catalog';
 import { studentSlug } from '@/lib/db';
 import { projectsOf } from '@/lib/queries';
@@ -11,8 +12,15 @@ import { ConfirmButton } from './confirm-button';
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Мой профиль' };
 
-export default async function CabinetPage({ searchParams }: { searchParams: Promise<{ saved?: string }> }) {
-  const me = await requireStudent();
+export default async function CabinetPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ course: string }>;
+  searchParams: Promise<{ saved?: string }>;
+}) {
+  const course = requireCourse((await params).course);
+  const me = await requireStudent(course.id);
   const { saved } = await searchParams;
   const hasProfile = me.is_published;
   const works = await projectsOf(me.id, true);
@@ -21,7 +29,7 @@ export default async function CabinetPage({ searchParams }: { searchParams: Prom
     <>
       <div className="pagehead cabinet-head">
         <div>
-          <div className="eyebrow">Личный кабинет</div>
+          <div className="eyebrow">Личный кабинет · {course.title}</div>
           <h1>
             Мой <span className="green">профиль</span>
           </h1>
@@ -45,11 +53,11 @@ export default async function CabinetPage({ searchParams }: { searchParams: Prom
               ? 'Анкета уже есть на платформе. Вы можете её обновить.'
               : 'Создайте анкету, чтобы другие ученики могли познакомиться с вами.'}
           </p>
-          <Link className="btn" href="/profile/edit">
+          <Link className="btn" href={`/${course.id}/profile/edit`}>
             {hasProfile ? 'Редактировать анкету' : 'Создать профиль'} →
           </Link>
           {hasProfile ? (
-            <Link className="back" style={{ margin: '18px 0 0' }} href={`/s/${studentSlug(me)}`}>
+            <Link className="back" style={{ margin: '18px 0 0' }} href={`/${course.id}/s/${studentSlug(me)}`}>
               Посмотреть анкету →
             </Link>
           ) : null}
@@ -57,7 +65,7 @@ export default async function CabinetPage({ searchParams }: { searchParams: Prom
         <section className="route">
           <h2>Мои проекты</h2>
           <p>Добавляйте новые проекты и обновляйте результаты.</p>
-          <Link className="btn action-blue" href="/profile/projects/new">
+          <Link className="btn action-blue" href={`/${course.id}/profile/projects/new`}>
             Добавить проект →
           </Link>
         </section>
@@ -74,9 +82,10 @@ export default async function CabinetPage({ searchParams }: { searchParams: Prom
                 {w.description ? <p className="clamp">{w.description}</p> : null}
                 {w.hidden_by_admin ? <p>Проект скрыт организатором.</p> : null}
                 <div className="actions">
-                  <Link href={`/w/${w.id}`}>Открыть</Link>
-                  <Link href={`/profile/projects/${w.id}`}>Редактировать</Link>
+                  <Link href={`/${course.id}/w/${w.id}`}>Открыть</Link>
+                  <Link href={`/${course.id}/profile/projects/${w.id}`}>Редактировать</Link>
                   <form action={toggleProject}>
+                    <input type="hidden" name="course" value={course.id} />
                     <input type="hidden" name="id" value={w.id} />
                     <input type="hidden" name="next" value={String(!w.is_published)} />
                     <button className="linkbtn" type="submit">
@@ -84,6 +93,7 @@ export default async function CabinetPage({ searchParams }: { searchParams: Prom
                     </button>
                   </form>
                   <form action={deleteProject}>
+                    <input type="hidden" name="course" value={course.id} />
                     <input type="hidden" name="id" value={w.id} />
                     <ConfirmButton message={`Удалить проект «${w.title}»? Это нельзя отменить.`}>Удалить</ConfirmButton>
                   </form>

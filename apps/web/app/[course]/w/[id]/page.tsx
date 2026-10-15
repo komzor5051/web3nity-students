@@ -1,18 +1,23 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireStudent } from '@/lib/auth';
+import { requireCourse } from '@/lib/courses';
 import { KIND_LABEL, toProjectCard } from '@/lib/catalog';
 import { studentSlug } from '@/lib/db';
-import { findProject, findStudentById } from '@/lib/queries';
+import { findProject } from '@/lib/queries';
 import { ProjectPreview, ProjectTags } from '@/lib/ui';
 import { cleanBio } from '@/lib/text';
 
 export const dynamic = 'force-dynamic';
 
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
-  await requireStudent();
-  const w = await findProject((await params).id);
-  return { title: w?.title ?? 'Проект' };
+type Params = Promise<{ course: string; id: string }>;
+
+export async function generateMetadata({ params }: { params: Params }) {
+  const { course: courseParam, id } = await params;
+  const course = requireCourse(courseParam);
+  await requireStudent(course.id);
+  const found = await findProject(id, course.id);
+  return { title: found?.work.title ?? 'Проект' };
 }
 
 function Field({ title, text }: { title: string; text: string | null | undefined }) {
@@ -34,20 +39,23 @@ function hostLabel(url: string): string {
   }
 }
 
-export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
-  const me = await requireStudent();
-  const w = await findProject((await params).id);
-  if (!w) notFound();
-  const author = await findStudentById(w.student_id);
+export default async function ProjectPage({ params }: { params: Params }) {
+  const { course: courseParam, id } = await params;
+  const course = requireCourse(courseParam);
+  const me = await requireStudent(course.id);
+  // Работа автора из другого курса здесь не находится: 404.
+  const found = await findProject(id, course.id);
+  if (!found) notFound();
+  const { work: w, author } = found;
   const own = w.student_id === me.id;
   // Скрытый проект или проект скрытой анкеты видит только автор.
-  if (!author || (!own && (!w.is_published || w.hidden_by_admin || !author.is_published))) notFound();
+  if (!own && (!w.is_published || w.hidden_by_admin || !author.is_published)) notFound();
 
   const p = toProjectCard(w, author);
 
   return (
     <>
-      <Link className="back" href="/projects">
+      <Link className="back" href={`/${course.id}/projects`}>
         ← Все проекты
       </Link>
       <div className="split detail">
@@ -60,7 +68,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           <Field title="Какая помощь или обратная связь нужна" text={w.feedback_request} />
           <div className="field">
             <strong>Автор</strong>
-            {author.is_published ? <Link href={`/s/${studentSlug(author)}`}>{author.display_name} →</Link> : <p>{author.display_name}</p>}
+            {author.is_published ? <Link href={`/${course.id}/s/${studentSlug(author)}`}>{author.display_name} →</Link> : <p>{author.display_name}</p>}
           </div>
           {w.hidden_by_admin ? <p className="nolink">Проект скрыт организатором и виден только вам.</p> : null}
           <div className="actions">
@@ -75,7 +83,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
               </a>
             ) : null}
             {own ? (
-              <Link className="btn action-blue" href={`/profile/projects/${w.id}`}>
+              <Link className="btn action-blue" href={`/${course.id}/profile/projects/${w.id}`}>
                 Редактировать проект →
               </Link>
             ) : null}

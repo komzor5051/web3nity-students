@@ -5,10 +5,8 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { tbl, type Student } from '@vibe/db';
+import { COURSE_IDS, getCourse, tbl, type CourseId, type Student } from '@vibe/db';
 import { normalizeAuthorKey } from '@vibe/parser';
-
-const COHORT = process.env.COHORT ?? 'vibecoding-main';
 
 export interface TgUser {
   id: number;
@@ -21,35 +19,50 @@ function displayName(user: TgUser): string {
   return [user.first_name, user.last_name].filter(Boolean).join(' ');
 }
 
-/** Ученик ли это: Telegram ID есть в списке участников чатов курса и доступ не закрыт. */
-export async function isMember(db: SupabaseClient, telegramUserId: number): Promise<boolean> {
+/** Курсы человека: где его Telegram ID есть в списке участников и доступ не закрыт. */
+export async function memberCourses(db: SupabaseClient, telegramUserId: number): Promise<CourseId[]> {
+  const { data } = await db
+    .from(tbl('members'))
+    .select('course')
+    .eq('telegram_user_id', telegramUserId)
+    .eq('revoked', false);
+  const have = new Set(((data ?? []) as { course: string }[]).map((r) => r.course));
+  return COURSE_IDS.filter((c) => have.has(c));
+}
+
+/** Ученик ли это курса: Telegram ID в списке участников курса, доступ не закрыт. */
+export async function isMember(db: SupabaseClient, telegramUserId: number, course: CourseId): Promise<boolean> {
   const { data } = await db
     .from(tbl('members'))
     .select('telegram_user_id')
     .eq('telegram_user_id', telegramUserId)
+    .eq('course', course)
     .eq('revoked', false)
     .maybeSingle();
   return Boolean(data);
 }
 
 /**
- * Найти / создать запись студента под пользователя бота. Вызывается только
- * для участников курса (см. isMember).
- * 1. По telegram_user_id — основной путь (импорт привязывает анкеты по ID
- *    автора сообщения, scripts/sync-members.ts).
- * 2. Иначе — по @username среди непривязанных анкет, только при единственном
- *    точном совпадении.
+ * Найти / создать запись студента под пользователя бота в КУРСЕ. Вызывается
+ * только для участников курса (см. memberCourses). Все шаги ограничены
+ * анкетами этого курса: на двух курсах у человека две отдельные анкеты.
+ * 1. По (telegram_user_id, course) — основной путь (импорт привязывает анкеты
+ *    по ID автора сообщения, scripts/sync-members.ts).
+ * 2. Иначе — по @username среди непривязанных анкет курса, только при
+ *    единственном точном совпадении.
  * 3. Иначе — новая пустая анкета, скрытая до заполнения формы на сайте.
  *    По имени не склеиваем: тёзки и вторые аккаунты дают ложные связи.
  */
 export async function getOrAttachStudent(
   db: SupabaseClient,
   user: TgUser,
+  course: CourseId,
 ): Promise<Student> {
   const byId = await db
     .from(tbl('students'))
     .select('*')
     .eq('telegram_user_id', user.id)
+    .eq('course', course)
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
@@ -61,6 +74,7 @@ export async function getOrAttachStudent(
     const byUsername = await db
       .from(tbl('students'))
       .select('*')
+      .eq('course', course)
       .is('telegram_user_id', null)
       .ilike('telegram_username', username);
     // ilike трактует '_' как wildcard, а в Telegram-username подчёркивания
@@ -87,7 +101,8 @@ export async function getOrAttachStudent(
       telegram_username: user.username ?? null,
       display_name: displayName(user) || `User ${user.id}`,
       import_key: normalizeAuthorKey(displayName(user)) || null,
-      cohort: COHORT,
+      cohort: getCourse(course)?.defaultCohort,
+      course,
       // Анкета появится в каталоге, когда ученик заполнит форму знакомства.
       is_published: false,
     })

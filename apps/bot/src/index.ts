@@ -1,7 +1,7 @@
 import './env.js';
 import { Telegraf, Markup } from 'telegraf';
 import { getServiceClient, tbl } from '@vibe/db';
-import { getOrAttachStudent, isMember } from './students.js';
+import { getOrAttachStudent, memberCourses } from './students.js';
 import { ensureAvatar } from './avatar.js';
 
 // === Бот = только авторизация ===
@@ -50,10 +50,11 @@ bot.start(async (ctx) => {
   if (!tgUser) return;
   const payload = (ctx as unknown as { startPayload?: string }).startPayload ?? '';
 
-  // Платформа закрыта для учеников: пускаем только участников чатов курса.
+  // Платформа закрыта для учеников: пускаем участников чатов любого курса.
   // Анкету постороннему не создаём; токен помечаем, чтобы сайт показал
   // «Доступ только для учеников».
-  if (!(await isMember(db, tgUser.id))) {
+  const courses = await memberCourses(db, tgUser.id);
+  if (courses.length === 0) {
     if (payload.startsWith('auth_')) {
       await db
         .from(tbl('web_auth_tokens'))
@@ -62,17 +63,24 @@ bot.start(async (ctx) => {
         .is('confirmed_at', null);
     }
     await ctx.reply(
-      'Платформа доступна только ученикам практикума «Вайбкодинг» Web3nity School. Ваш Telegram-аккаунт не найден в чатах курса. Если вы учитесь на практикуме, напишите организатору.',
+      'Платформа доступна только ученикам курсов Web3nity School. Ваш Telegram-аккаунт не найден в чатах курсов. Если вы учитесь на курсе, напишите организатору.',
     );
     return;
   }
 
-  const student = await getOrAttachStudent(db, {
-    id: tgUser.id,
-    username: tgUser.username,
-    first_name: tgUser.first_name,
-    last_name: tgUser.last_name,
-  });
+  // Токен входа хранит анкету первого курса человека (vibecoding первым);
+  // сайт по ней узнаёт человека, а анкеты остальных курсов заводит сам при
+  // первом заходе в курс (apps/web/lib/auth.ts, getCurrentStudent).
+  const student = await getOrAttachStudent(
+    db,
+    {
+      id: tgUser.id,
+      username: tgUser.username,
+      first_name: tgUser.first_name,
+      last_name: tgUser.last_name,
+    },
+    courses[0]!,
+  );
 
   // Подтягиваем фото профиля из Telegram, если аватара ещё нет.
   // Fire-and-forget: вход блокировать нельзя, осечка не должна ронять /start.

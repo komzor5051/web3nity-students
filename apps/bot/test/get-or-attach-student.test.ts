@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { getOrAttachStudent, isMember, type TgUser } from '../src/students.js';
+import { getOrAttachStudent, isMember, memberCourses, type TgUser } from '../src/students.js';
 
 /**
  * Лёгкий мок Supabase-клиента. Каждый вызов db.from(...) собирает цепочку
@@ -112,11 +112,13 @@ describe('getOrAttachStudent', () => {
     };
     const { db, ops } = makeDb(handler);
 
-    const result = await getOrAttachStudent(db, user);
+    const result = await getOrAttachStudent(db, user, 'vibecoding');
 
     expect(result.id).toBe('stud-1');
     expect(result.telegram_user_id).toBe(42);
 
+    // username-матч только среди анкет своего курса
+    expect(ops.find((o) => 'telegram_username' in o.ilike)!.eq.course).toBe('vibecoding');
     // username сравнивается в нижнем регистре
     const usernameSelect = ops.find((o) => 'telegram_username' in o.ilike)!;
     expect(usernameSelect.ilike.telegram_username).toBe('alice');
@@ -146,7 +148,7 @@ describe('getOrAttachStudent', () => {
     };
     const { db, ops } = makeDb(handler);
 
-    const result = await getOrAttachStudent(db, user);
+    const result = await getOrAttachStudent(db, user, 'vibecoding');
 
     expect(result.id).toBe('new-1');
     // апдейта быть не должно — привязка пропущена
@@ -163,7 +165,7 @@ describe('getOrAttachStudent', () => {
     };
     const { db, ops } = makeDb(handler);
 
-    const result = await getOrAttachStudent(db, user);
+    const result = await getOrAttachStudent(db, user, 'vibecoding');
 
     expect(result.id).toBe('existing');
     // username-селекта не было
@@ -189,7 +191,7 @@ describe('getOrAttachStudent', () => {
     };
     const { db, ops } = makeDb(handler);
 
-    const result = await getOrAttachStudent(db, underscoreUser);
+    const result = await getOrAttachStudent(db, underscoreUser, 'vibecoding');
 
     expect(result.id).toBe('fresh');
     expect(ops.some((o) => o.kind === 'update')).toBe(false);
@@ -210,7 +212,7 @@ describe('getOrAttachStudent', () => {
     };
     const { db } = makeDb(handler);
 
-    const result = await getOrAttachStudent(db, user);
+    const result = await getOrAttachStudent(db, user, 'vibecoding');
 
     expect(result.id).toBe('fresh');
     expect(insertSpy).toHaveBeenCalledOnce();
@@ -222,11 +224,53 @@ describe('getOrAttachStudent', () => {
   });
 });
 
+describe('курсы', () => {
+  it('(е) поиск по telegram_user_id ограничен курсом, новая анкета создаётся в нём', async () => {
+    const insertSpy = vi.fn();
+    const handler: Handler = (op) => {
+      if (op.kind === 'select' && 'telegram_user_id' in op.eq) {
+        // в курсе assistants анкеты у человека нет (в vibecoding есть, но это другой курс)
+        return { data: op.eq.course === 'vibecoding' ? { id: 'vibe-1' } : null };
+      }
+      if (op.kind === 'select' && 'telegram_username' in op.ilike) return { data: [] };
+      if (op.kind === 'insert') {
+        insertSpy(op.insert);
+        return { data: { id: 'asst-1', course: 'assistants' } };
+      }
+      throw new Error('unexpected op: ' + JSON.stringify(op));
+    };
+    const { db } = makeDb(handler);
+
+    const inVibe = await getOrAttachStudent(db, user, 'vibecoding');
+    expect(inVibe.id).toBe('vibe-1');
+    const inAsst = await getOrAttachStudent(db, user, 'assistants');
+    expect(inAsst.id).toBe('asst-1');
+    expect(insertSpy.mock.calls[0]![0]).toMatchObject({ course: 'assistants', cohort: 'assistants-main', telegram_user_id: 42 });
+  });
+});
+
 describe('isMember', () => {
-  it('пускает только участника из списка без закрытого доступа', async () => {
-    const { db, ops } = makeDb((op) => (op.eq.telegram_user_id === 42 ? { data: { telegram_user_id: 42 } } : { data: null }));
-    expect(await isMember(db, 42)).toBe(true);
-    expect(await isMember(db, 7)).toBe(false);
+  it('пускает только участника курса из списка без закрытого доступа', async () => {
+    const { db, ops } = makeDb((op) =>
+      op.eq.telegram_user_id === 42 && op.eq.course === 'assistants' ? { data: { telegram_user_id: 42 } } : { data: null },
+    );
+    expect(await isMember(db, 42, 'assistants')).toBe(true);
+    // тот же человек не участник другого курса
+    expect(await isMember(db, 42, 'vibecoding')).toBe(false);
+    expect(await isMember(db, 7, 'assistants')).toBe(false);
     expect(ops[0]!.eq.revoked).toBe(false);
+  });
+});
+
+describe('memberCourses', () => {
+  it('человек в двух курсах получает оба в порядке реестра, неизвестные курсы отбрасываются', async () => {
+    const { db, ops } = makeDb(() => ({ data: [{ course: 'assistants' }, { course: 'vibecoding' }, { course: 'junk' }] }));
+    expect(await memberCourses(db, 42)).toEqual(['vibecoding', 'assistants']);
+    expect(ops[0]!.eq.revoked).toBe(false);
+  });
+
+  it('нет записей — пустой список', async () => {
+    const { db } = makeDb(() => ({ data: [] }));
+    expect(await memberCourses(db, 1)).toEqual([]);
   });
 });

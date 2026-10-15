@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { randomBytes } from 'crypto';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { COURSE_IDS, getCourse, type CourseId } from '@vibe/db/courses';
 import { tbl, type StudentRow } from './db';
 
 export const SESSION_COOKIE = 'w3n_session';
@@ -76,12 +77,13 @@ export async function pollAuthToken(token: string): Promise<
 
   // Вторая проверка участия — на случай старой версии бота, которая
   // подтверждала вход любому. Анкету, созданную таким входом, прячем.
+  // Достаточно членства в любом курсе: какие курсы видны, решает getMemberCourses.
   const { data: student } = await svc
     .from(tbl('students'))
     .select('id, telegram_user_id, source_message_id')
     .eq('id', data.student_id)
     .maybeSingle();
-  if (!student?.telegram_user_id || !(await isMember(student.telegram_user_id))) {
+  if (!student?.telegram_user_id || (await memberCourses(student.telegram_user_id)).length === 0) {
     if (student && !student.source_message_id) {
       await svc.from(tbl('students')).update({ is_published: false }).eq('id', student.id);
     }
@@ -101,14 +103,9 @@ export async function pollAuthToken(token: string): Promise<
   return { status: 'confirmed', sessionId, studentId: data.student_id };
 }
 
-/**
- * Прочитать текущего ученика по cookie. Возвращает null, если сессии нет,
- * она истекла или человек больше не числится среди участников курса
- * (организатор закрыл доступ). Это единственная точка проверки доступа:
- * все страницы и действия с данными учеников идут через неё.
- */
-// cache(): шапка и страница спрашивают ученика в одном запросе — ходим в базу один раз.
-export const getCurrentStudent = cache(async (): Promise<StudentRow | null> => {
+/** Telegram ID владельца сессии или null: нет cookie, сессия истекла или анкета без Telegram. */
+// cache(): шапка и страница спрашивают в одном запросе — ходим в базу один раз.
+const sessionTelegramId = cache(async (): Promise<number | null> => {
   const jar = await cookies();
   const sid = jar.get(SESSION_COOKIE)?.value;
   if (!sid) return null;
@@ -123,32 +120,113 @@ export const getCurrentStudent = cache(async (): Promise<StudentRow | null> => {
     await svc.from(tbl('web_sessions')).delete().eq('session_id', sid);
     return null;
   }
+  // Сессия хранит student_id той анкеты, через которую вошли; по ней берём
+  // человека (telegram_user_id), а анкету нужного курса ищем отдельно.
   const { data: student } = await svc
     .from(tbl('students'))
-    .select('*')
+    .select('telegram_user_id')
     .eq('id', sess.student_id)
     .maybeSingle();
-  const me = (student as StudentRow | null) ?? null;
-  if (!me?.telegram_user_id) return null;
-  return (await isMember(me.telegram_user_id)) ? me : null;
+  const tg = student?.telegram_user_id;
+  return tg ? Number(tg) : null;
 });
 
-/** Ученик ли это: Telegram ID в списке участников курса, доступ не закрыт. */
-export async function isMember(telegramUserId: number): Promise<boolean> {
-  const { data } = await serviceClient()
-    .from(tbl('members'))
-    .select('telegram_user_id')
-    .eq('telegram_user_id', telegramUserId)
-    .eq('revoked', false)
-    .maybeSingle();
-  return Boolean(data);
+/** Курсы, в которых человек числится учеником (доступ не закрыт). Пусто — нет сессии или доступа. */
+export const getMemberCourses = cache(async (): Promise<CourseId[]> => {
+  const tg = await sessionTelegramId();
+  return tg ? memberCourses(tg) : [];
+});
+
+/**
+ * Прочитать текущего ученика в курсе: сессия -> telegram_user_id -> анкета
+ * (telegram_user_id, course), при условии что человек участник ЭТОГО курса.
+ * Null — нет сессии или доступ к курсу закрыт. Это единственная точка проверки
+ * доступа: все страницы и действия с данными учеников идут через неё.
+ * Если человек участник курса, но анкеты в нём ещё нет, заводим пустую
+ * скрытую (как раньше делал бот): появится в каталоге после заполнения формы.
+ */
+export const getCurrentStudent = cache(async (course: CourseId): Promise<StudentRow | null> => {
+  const tg = await sessionTelegramId();
+  if (!tg) return null;
+  const member = await getMember(tg, course);
+  if (!member) return null;
+  return findOrCreateStudent(tg, course, member);
+});
+
+async function findOrCreateStudent(tg: number, course: CourseId, member: MemberRow): Promise<StudentRow> {
+  const svc = serviceClient();
+  const find = async () => {
+    const { data } = await svc
+      .from(tbl('students'))
+      .select('*')
+      .eq('telegram_user_id', tg)
+      .eq('course', course)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    return (data as StudentRow | null) ?? null;
+  };
+  const existing = await find();
+  if (existing) return existing;
+
+  const { data, error } = await svc
+    .from(tbl('students'))
+    .insert({
+      telegram_user_id: tg,
+      telegram_username: member.username,
+      display_name: member.display_name?.trim() || `User ${tg}`,
+      cohort: getCourse(course)?.defaultCohort,
+      course,
+      is_published: false,
+    })
+    .select('*')
+    .single();
+  if (!error && data) return data as StudentRow;
+  // Параллельный запрос успел раньше: уникальность (telegram_user_id, course).
+  const raced = await find();
+  if (raced) return raced;
+  throw error ?? new Error('student create failed');
 }
 
-/** Для страниц: без подтверждённого ученика — на экран входа. */
-export async function requireStudent(): Promise<StudentRow> {
-  const me = await getCurrentStudent().catch(() => null);
-  if (!me) redirect('/login');
-  return me;
+type MemberRow = { telegram_user_id: number; username: string | null; display_name: string | null };
+
+/** Запись участника курса или null. У человека может быть по записи на каждый курс. */
+export async function getMember(telegramUserId: number, course: CourseId): Promise<MemberRow | null> {
+  const { data } = await serviceClient()
+    .from(tbl('members'))
+    .select('telegram_user_id, username, display_name')
+    .eq('telegram_user_id', telegramUserId)
+    .eq('course', course)
+    .eq('revoked', false)
+    .maybeSingle();
+  return (data as MemberRow | null) ?? null;
+}
+
+/** Ученик ли это курса: Telegram ID в списке участников курса, доступ не закрыт. */
+export async function isMember(telegramUserId: number, course: CourseId): Promise<boolean> {
+  return Boolean(await getMember(telegramUserId, course));
+}
+
+/** Все курсы человека (не закрытые), в порядке реестра. */
+export async function memberCourses(telegramUserId: number): Promise<CourseId[]> {
+  const { data } = await serviceClient()
+    .from(tbl('members'))
+    .select('course')
+    .eq('telegram_user_id', telegramUserId)
+    .eq('revoked', false);
+  const have = new Set((data ?? []).map((r) => r.course as string));
+  return COURSE_IDS.filter((c) => have.has(c));
+}
+
+/**
+ * Для страниц курса: без ученика этого курса — на вход. Если человек вошёл,
+ * но в этом курсе не учится, ведём в его курс, а не на экран входа.
+ */
+export async function requireStudent(course: CourseId): Promise<StudentRow> {
+  const me = await getCurrentStudent(course).catch(() => null);
+  if (me) return me;
+  const mine = await getMemberCourses().catch(() => []);
+  redirect(mine[0] && mine[0] !== course ? `/${mine[0]}` : '/login');
 }
 
 export async function destroySession(): Promise<void> {

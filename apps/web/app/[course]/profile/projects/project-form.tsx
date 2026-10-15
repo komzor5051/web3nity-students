@@ -1,14 +1,15 @@
 import Link from 'next/link';
+import type { CourseId } from '@/lib/courses';
 import type { WorkRow } from '@/lib/db';
 import { KIND_LABEL, KIND_ORDER, projectImageUrl } from '@/lib/catalog';
 import { saveProject } from '../actions';
 import { ActionForm, SubmitButton } from '../action-form';
 
-export function ProjectForm({ work }: { work?: WorkRow }) {
+export function ProjectForm({ work, course }: { work?: WorkRow; course: CourseId }) {
   const cover = work ? projectImageUrl(work) : null;
   return (
     <div className="form">
-      <Link className="back" href={work ? `/w/${work.id}` : '/projects'}>
+      <Link className="back" href={work ? `/${course}/w/${work.id}` : `/${course}/projects`}>
         {work ? '← К проекту' : '← Все проекты'}
       </Link>
       <div className="eyebrow">Мой проект</div>
@@ -18,6 +19,7 @@ export function ProjectForm({ work }: { work?: WorkRow }) {
       </h1>
       <p className="lead">Расскажите, что вы создаёте и какую задачу решает ваш инструмент.</p>
       <ActionForm action={saveProject} id="add-form">
+        <input type="hidden" name="course" value={course} />
         {work ? <input type="hidden" name="id" value={work.id} /> : null}
         <div className="form-group">
           <label htmlFor="title">Название проекта</label>

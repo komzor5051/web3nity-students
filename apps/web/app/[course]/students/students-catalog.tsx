@@ -2,11 +2,12 @@
 
 import { useMemo, useState } from 'react';
 import { NONE, REGIONS, STATUS_LABEL, STATUS_ORDER, type StudentCardData } from '@/lib/catalog';
+import type { CourseId } from '@vibe/db/courses';
 import { matchesTerms } from '@/lib/text';
 import { StudentCard } from '@/lib/ui';
 import { Results } from '../catalog-results';
 
-export default function StudentsCatalog({ items, spheres }: { items: StudentCardData[]; spheres: string[] }) {
+export default function StudentsCatalog({ items, spheres, course }: { items: StudentCardData[]; spheres: string[]; course: CourseId }) {
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
   const [sphere, setSphere] = useState('');
@@ -84,7 +85,7 @@ export default function StudentsCatalog({ items, spheres }: { items: StudentCard
       />
       <div className="grid">
         {found.map((s) => (
-          <StudentCard key={s.id} s={s} />
+          <StudentCard key={s.id} s={s} course={course} />
         ))}
       </div>
       {found.length === 0 ? (

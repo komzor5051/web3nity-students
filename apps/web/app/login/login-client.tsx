@@ -59,7 +59,7 @@ export default function LoginClient({ initiallyDenied }: { initiallyDenied: bool
       <div role="alert">
         <h2>Доступ только для учеников</h2>
         <p className="demo">
-          Этот Telegram-аккаунт не найден среди участников практикума. Если вы учитесь на практикуме, войдите с
+          Этот Telegram-аккаунт не найден среди участников курсов. Если вы учитесь на курсе, войдите с
           аккаунта, которым состоите в чате курса, или напишите организатору.
         </p>
         <button className="btn" type="button" onClick={() => (location.href = '/login')}>
@@ -102,7 +102,7 @@ export default function LoginClient({ initiallyDenied }: { initiallyDenied: bool
       <p className="demo" role="status">
         {opened
           ? 'В Telegram нажмите «Запустить» в боте. Эта страница откроет платформу сама, или нажмите кнопку в ответе бота.'
-          : 'Вход подтверждает бот практикума. Платформа открыта только ученикам.'}
+          : 'Вход подтверждает бот школы. Платформа открыта только ученикам.'}
       </p>
     </>
   );

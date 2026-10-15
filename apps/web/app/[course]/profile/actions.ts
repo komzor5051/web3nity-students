@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getCurrentStudent, serviceClient } from '@/lib/auth';
+import { getCourse, type CourseId } from '@/lib/courses';
 import { tbl, type StudentStatus, type WorkKind, type WorkStage } from '@/lib/db';
 import { REGIONS, STATUS_ORDER } from '@/lib/catalog';
 import { uploadAvatar, uploadWorkMedia } from '@/lib/storage';
@@ -28,14 +29,27 @@ function file(form: FormData, key: string): File | null {
 
 const SESSION_GONE: ActionResult = { ok: false, error: 'Сессия истекла. Войдите заново и повторите.' };
 
-function touch(paths: string[]) {
-  for (const p of ['/', '/students', '/projects', '/profile', ...paths]) revalidatePath(p);
+function touch(course: CourseId, paths: string[]) {
+  for (const p of ['', '/students', '/projects', '/profile', ...paths]) revalidatePath(`/${course}${p}`);
+}
+
+/**
+ * Текущий ученик в курсе из скрытого поля формы. Курс проверяется по реестру,
+ * а анкета берётся из сессии и членства в ЭТОМ курсе, поэтому подменой поля
+ * чужую анкету или чужой курс не отредактировать.
+ */
+async function actor(form: FormData) {
+  const course = getCourse(form.get('course'));
+  if (!course) return null;
+  const me = await getCurrentStudent(course.id).catch(() => null);
+  return me ? { me, course: course.id } : null;
 }
 
 /** Создать или обновить свою анкету. Пишет только в запись текущего ученика. */
 export async function saveProfile(_prev: ActionResult, form: FormData): Promise<ActionResult> {
-  const me = await getCurrentStudent().catch(() => null);
-  if (!me) return SESSION_GONE;
+  const who = await actor(form);
+  if (!who) return SESSION_GONE;
+  const { me, course } = who;
 
   const name = text(form, 'display_name', 120);
   if (!name) return { ok: false, error: 'Укажите, как вас зовут.' };
@@ -73,14 +87,15 @@ export async function saveProfile(_prev: ActionResult, form: FormData): Promise<
 
   const { error } = await serviceClient().from(tbl('students')).update(patch).eq('id', me.id);
   if (error) return { ok: false, error: 'Не удалось сохранить анкету. Попробуйте ещё раз.' };
-  touch(['/profile/edit']);
-  redirect('/profile?saved=profile');
+  touch(course, ['/profile/edit']);
+  redirect(`/${course}/profile?saved=profile`);
 }
 
 /** Добавить проект или обновить свой. Автор — всегда текущий ученик. */
 export async function saveProject(_prev: ActionResult, form: FormData): Promise<ActionResult> {
-  const me = await getCurrentStudent().catch(() => null);
-  if (!me) return SESSION_GONE;
+  const who = await actor(form);
+  if (!who) return SESSION_GONE;
+  const { me, course } = who;
 
   const id = text(form, 'id', 64);
   const title = text(form, 'title', 160);
@@ -140,14 +155,15 @@ export async function saveProject(_prev: ActionResult, form: FormData): Promise<
     if (error || !data) return { ok: false, error: 'Не удалось опубликовать проект. Попробуйте ещё раз.' };
     workId = data.id as string;
   }
-  touch([`/w/${workId}`]);
-  redirect(`/w/${workId}`);
+  touch(course, [`/w/${workId}`]);
+  redirect(`/${course}/w/${workId}`);
 }
 
 /** Скрыть / снова показать свой проект. */
 export async function toggleProject(form: FormData): Promise<void> {
-  const me = await getCurrentStudent().catch(() => null);
-  if (!me) return;
+  const who = await actor(form);
+  if (!who) return;
+  const { me, course } = who;
   const id = form.get('id');
   if (typeof id !== 'string') return;
   await serviceClient()
@@ -155,15 +171,16 @@ export async function toggleProject(form: FormData): Promise<void> {
     .update({ is_published: form.get('next') === 'true' })
     .eq('id', id)
     .eq('student_id', me.id);
-  touch([`/w/${id}`]);
+  touch(course, [`/w/${id}`]);
 }
 
 /** Удалить свой проект. */
 export async function deleteProject(form: FormData): Promise<void> {
-  const me = await getCurrentStudent().catch(() => null);
-  if (!me) return;
+  const who = await actor(form);
+  if (!who) return;
+  const { me, course } = who;
   const id = form.get('id');
   if (typeof id !== 'string') return;
   await serviceClient().from(tbl('works')).delete().eq('id', id).eq('student_id', me.id);
-  touch([]);
+  touch(course, []);
 }

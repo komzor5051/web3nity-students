@@ -3,10 +3,11 @@
 import { useState } from 'react';
 import { KIND_LABEL, KIND_ORDER, NONE, type ProjectCardData } from '@/lib/catalog';
 import { matchesTerms } from '@/lib/text';
+import type { CourseId } from '@vibe/db/courses';
 import { ProjectCard } from '@/lib/ui';
 import { Results } from '../catalog-results';
 
-export default function ProjectsCatalog({ items }: { items: ProjectCardData[] }) {
+export default function ProjectsCatalog({ items, course }: { items: ProjectCardData[]; course: CourseId }) {
   const [q, setQ] = useState('');
   const [kind, setKind] = useState('');
 
@@ -51,7 +52,7 @@ export default function ProjectsCatalog({ items }: { items: ProjectCardData[] })
       />
       <div className="grid">
         {found.map((p) => (
-          <ProjectCard key={p.id} p={p} />
+          <ProjectCard key={p.id} p={p} course={course} />
         ))}
       </div>
       {found.length === 0 ? (

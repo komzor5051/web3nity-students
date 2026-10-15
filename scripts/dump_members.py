@@ -2,9 +2,12 @@
 """Список участников чатов курса — источник доступа к платформе.
 
 Платформа закрыта для учеников: войти может только тот, чей Telegram ID есть
-среди участников чатов VIBECODING (или добавлен организатором вручную).
+среди участников чатов курсов (или добавлен организатором вручную).
 Скрипт только читает списки участников и пишет их в JSON; в базу их кладёт
 scripts/sync-members.ts.
+
+Курсов два (vibecoding, assistants), базы раздельные: человек из чатов обоих
+курсов попадает в список дважды, по одной записи на курс (поле course).
 
     python3 scripts/dump_members.py --out data/members.json
 """
@@ -19,7 +22,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path.home() / "tg-archive"))
 from tgcommon import make_client  # noqa: E402
 
-CHATS = [-1004353204500, -1004413372752, -1003966609206, -1003709866237]
+# Держать в синхроне с packages/db/src/courses.ts (COURSES).
+COURSES = {
+    "vibecoding": [-1004353204500, -1004413372752, -1003966609206, -1003709866237],
+    "assistants": [-1003764026898, -1003803830627],  # «AI-АССИСТЕНТЫ 3.0», «AI-Ассистенты | VIP»
+}
 
 
 async def main():
@@ -31,22 +38,25 @@ async def main():
     await client.start()
     members = {}
     try:
-        for chat_id in CHATS:
-            entity = await client.get_entity(chat_id)
-            count = 0
-            async for user in client.iter_participants(entity):
-                if getattr(user, "bot", False) or getattr(user, "deleted", False):
-                    continue
-                name = " ".join(filter(None, [user.first_name, user.last_name])).strip()
-                m = members.setdefault(user.id, {
-                    "telegram_user_id": user.id,
-                    "username": user.username,
-                    "display_name": name or None,
-                    "chats": [],
-                })
-                m["chats"].append(chat_id)
-                count += 1
-            print(f"{getattr(entity, 'title', chat_id)}: {count}", file=sys.stderr)
+        for course, chats in COURSES.items():
+            for chat_id in chats:
+                entity = await client.get_entity(chat_id)
+                count = 0
+                async for user in client.iter_participants(entity):
+                    if getattr(user, "bot", False) or getattr(user, "deleted", False):
+                        continue
+                    name = " ".join(filter(None, [user.first_name, user.last_name])).strip()
+                    # Ключ (id, курс): одна запись на человека в каждом курсе.
+                    m = members.setdefault((user.id, course), {
+                        "telegram_user_id": user.id,
+                        "course": course,
+                        "username": user.username,
+                        "display_name": name or None,
+                        "chats": [],
+                    })
+                    m["chats"].append(chat_id)
+                    count += 1
+                print(f"[{course}] {getattr(entity, 'title', chat_id)}: {count}", file=sys.stderr)
     finally:
         await client.disconnect()
 
@@ -55,7 +65,8 @@ async def main():
         "members": list(members.values()),
     }
     Path(args.out).write_text(json.dumps(out, ensure_ascii=False, indent=1))
-    print(f"total unique: {len(members)} -> {args.out}", file=sys.stderr)
+    unique = len({tg for tg, _ in members})
+    print(f"записей (человек x курс): {len(members)}, уникальных людей: {unique} -> {args.out}", file=sys.stderr)
 
 
 if __name__ == "__main__":

@@ -6,14 +6,17 @@
  *   npm run recommend            — записать в БД
  *   npm run recommend -- --dry   — показать план без записи
  *
- * Один прогон LLM по всему списку участников. Сайт потом только читает
+ * Один прогон LLM на курс: базы курсов не смешиваются, участники и
+ * рекомендуемые берутся только из одного курса. Сайт потом только читает
  * таблицу recommendations — на просмотре страниц токены не тратятся.
  *
- * Идемпотентно: таблица recommendations полностью перезаписывается.
+ *   npm run recommend -- --course assistants   — только один курс
+ *
+ * Идемпотентно: рекомендации курса перезаписываются целиком, чужой курс не трогаем.
  */
 
 import 'dotenv/config';
-import { getServiceClient, tbl, type Student } from '@vibe/db';
+import { COURSE_IDS, getServiceClient, isCourseId, tbl, type CourseId, type Student } from '@vibe/db';
 import { recommendConnections, type RosterEntry } from '@vibe/parser';
 
 const DRY = process.argv.includes('--dry') || process.argv.includes('--dry-run');
@@ -50,6 +53,16 @@ function toRosterEntry(s: ProfileRow, idx: number): RosterEntry {
 
 async function main(): Promise<void> {
   const db = getServiceClient();
+  const arg = process.argv.indexOf('--course');
+  const only = arg >= 0 ? process.argv[arg + 1] : undefined;
+  if (only !== undefined && !isCourseId(only)) throw new Error(`неизвестный курс: ${only}`);
+  for (const course of only ? [only as CourseId] : COURSE_IDS) {
+    console.log(`\n[recommend] === курс ${course} ===`);
+    await runCourse(db, course);
+  }
+}
+
+async function runCourse(db: ReturnType<typeof getServiceClient>, course: CourseId): Promise<void> {
 
   // 1. Все участники. Рекомендации генерируем для каждого (в т.ч. ещё не
   //    опубликованных — чтобы новый вошедший сразу видел подборку), а
@@ -58,7 +71,8 @@ async function main(): Promise<void> {
     .from(tbl('students'))
     .select(
       'id, display_name, niche, city, country, bio, goal, expertise, hobbies, status, is_published',
-    );
+    )
+    .eq('course', course);
   if (error) throw error;
   const students = (data ?? []) as ProfileRow[];
   const published = students.filter((s) => s.is_published);
@@ -117,9 +131,12 @@ async function main(): Promise<void> {
     return;
   }
 
-  // 5. Полная перезапись таблицы.
-  const del = await db.from(tbl('recommendations')).delete().gte('rank', 0);
-  if (del.error) throw del.error;
+  // 5. Перезапись рекомендаций курса (по student_id учеников курса).
+  const courseIds = students.map((s) => s.id);
+  for (let i = 0; i < courseIds.length; i += 200) {
+    const del = await db.from(tbl('recommendations')).delete().in('student_id', courseIds.slice(i, i + 200));
+    if (del.error) throw del.error;
+  }
 
   for (let i = 0; i < rows.length; i += 500) {
     const chunk = rows.slice(i, i + 500);

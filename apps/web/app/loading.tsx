@@ -3,7 +3,7 @@ export default function Loading() {
     <div aria-busy="true" aria-live="polite">
       <span className="skip-link">Загружаем…</span>
       <div className="pagehead">
-        <div className="eyebrow">Практикум «Вайбкодинг»</div>
+        <div className="eyebrow">Web3nity School</div>
       </div>
       <div className="grid">
         <div className="skeleton" />

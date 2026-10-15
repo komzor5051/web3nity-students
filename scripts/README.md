@@ -20,3 +20,13 @@
 Скриншоты живых сайтов из works.live_url в бакет vibe-works-media.
 
     npm run screenshots
+
+## Курсы
+
+Платформа разделена на два курса: `vibecoding` и `assistants` (реестр —
+`packages/db/src/courses.ts`). `dump_members.py` пишет участников по обоим
+курсам, по записи на каждую пару (человек, курс); `sync-members.ts` кладёт их
+в `vibe_members` с ключом `(telegram_user_id, course)`. Миграция —
+`supabase/migrations/20261015_courses.sql`, применяется вручную до запуска
+`npm run members`. `recommend` идёт по курсам отдельно (`-- --course assistants`).
+Импорт анкет пока ведёт только чаты вайбкодинга.
