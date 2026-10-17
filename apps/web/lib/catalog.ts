@@ -2,7 +2,7 @@
  * Справочники и приведение строк базы к виду карточек. Без обращений к базе,
  * поэтому годится и серверу, и клиентским каталогам.
  */
-import { studentSlug, type StudentRow, type StudentStatus, type WorkKind, type WorkRow, type WorkStage } from './db';
+import { studentSlug, type StudentRow, type StudentStatus, type WorkKind, type WorkPurpose, type WorkRow, type WorkStage } from './db';
 import { resolveRegion } from './region';
 import { canonicalSphere, cleanBio, tgHandle } from './text';
 
@@ -25,6 +25,34 @@ export const KIND_LABEL: Record<WorkKind, string> = {
   other: 'Другое',
 };
 export const KIND_ORDER: WorkKind[] = ['site', 'app', 'bot', 'agent', 'crm', 'automation', 'other'];
+
+// В курсе AI-ассистентов проекты делятся по назначению, а не по инструменту.
+export const PURPOSE_LABEL: Record<WorkPurpose, string> = {
+  sales: 'Продажи и заявки',
+  support: 'Ответы клиентам',
+  booking: 'Запись и заказы',
+  content: 'Контент и соцсети',
+  data: 'Документы и данные',
+  learning: 'Обучение',
+  personal: 'Личный помощник',
+  other: 'Другое',
+};
+export const PURPOSE_ORDER: WorkPurpose[] = ['sales', 'support', 'booking', 'content', 'data', 'learning', 'personal', 'other'];
+
+export function isPurpose(value: unknown): value is WorkPurpose {
+  return typeof value === 'string' && (PURPOSE_ORDER as string[]).includes(value);
+}
+
+/** Классификация проекта зависит от курса: назначение у ассистентов, тип инструмента у вайбкодинга. */
+export function usesPurpose(course: string): boolean {
+  return course === 'assistants';
+}
+
+/** Подпись классификации проекта для карточки и страницы проекта. */
+export function projectClassLabel(p: { kind: WorkKind | null; purpose: WorkPurpose | null }, course: string): string | null {
+  if (usesPurpose(course)) return p.purpose ? PURPOSE_LABEL[p.purpose] : null;
+  return p.kind ? KIND_LABEL[p.kind] : null;
+}
 
 export const STAGE_LABEL: Record<WorkStage, string> = {
   in_progress: 'В работе',
@@ -64,6 +92,7 @@ export type ProjectCardData = {
   title: string;
   description: string | null;
   kind: WorkKind | null;
+  purpose: WorkPurpose | null;
   stage: WorkStage | null;
   liveUrl: string | null;
   repoUrl: string | null;
@@ -122,6 +151,7 @@ export function toProjectCard(w: WorkRow, author: Pick<StudentRow, 'display_name
     title: w.title,
     description: cleanBio(w.description),
     kind: w.kind,
+    purpose: w.purpose ?? null,
     stage: w.stage,
     liveUrl: w.live_url,
     repoUrl: w.repo_url,

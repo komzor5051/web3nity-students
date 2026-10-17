@@ -7,6 +7,8 @@ export type CourseId = (typeof COURSE_IDS)[number];
 export interface Course {
   id: CourseId;
   title: string;
+  /** Надзаголовок страниц курса (eyebrow). */
+  eyebrow: string;
   /** Метка потока для новых анкет, заведённых при входе (импорт ставит свою). */
   defaultCohort: string;
   /** Telegram-чаты курса: участники этих чатов — ученики курса. */
@@ -18,12 +20,14 @@ export const COURSES: Course[] = [
   {
     id: 'vibecoding',
     title: 'Вайбкодинг',
+    eyebrow: 'Практикум «Вайбкодинг»',
     defaultCohort: 'vibecoding-main',
     chatIds: [-1004353204500, -1004413372752, -1003966609206, -1003709866237],
   },
   {
     id: 'assistants',
-    title: 'AI-Ассистенты',
+    title: 'AI-ассистенты',
+    eyebrow: 'AI-ассистенты и агенты',
     defaultCohort: 'assistants-main',
     // «AI-АССИСТЕНТЫ 3.0» и «AI-Ассистенты | VIP».
     chatIds: [-1003764026898, -1003803830627],

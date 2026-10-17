@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireStudent } from '@/lib/auth';
 import { requireCourse } from '@/lib/courses';
-import { KIND_LABEL, toProjectCard } from '@/lib/catalog';
+import { projectClassLabel, toProjectCard } from '@/lib/catalog';
 import { studentSlug } from '@/lib/db';
 import { findProject } from '@/lib/queries';
 import { ProjectPreview, ProjectTags } from '@/lib/ui';
@@ -60,9 +60,9 @@ export default async function ProjectPage({ params }: { params: Params }) {
       </Link>
       <div className="split detail">
         <section>
-          <div className="eyebrow">Проект ученика{w.kind ? ` · ${KIND_LABEL[w.kind]}` : ''}</div>
+          <div className="eyebrow">Проект ученика{projectClassLabel(w, course.id) ? ` · ${projectClassLabel(w, course.id)}` : ''}</div>
           <h1>{w.title}</h1>
-          <ProjectTags p={p} />
+          <ProjectTags p={p} course={course.id} />
           <Field title="Какую задачу решает и для кого" text={cleanBio(w.description)} />
           <Field title="Что уже получилось реализовать" text={w.features} />
           <Field title="Какая помощь или обратная связь нужна" text={w.feedback_request} />
@@ -91,7 +91,7 @@ export default async function ProjectPage({ params }: { params: Params }) {
           {!w.live_url ? <p className="nolink">Ссылка на проект не добавлена.</p> : null}
         </section>
         <aside className="panel">
-          <ProjectPreview p={p} />
+          <ProjectPreview p={p} course={course.id} />
           <p className="location">
             {p.imageUrl ? 'Скриншот проекта' : 'Условный макет: скриншот не добавлен'}
             {w.live_url ? ` · ${hostLabel(w.live_url)}` : ''}

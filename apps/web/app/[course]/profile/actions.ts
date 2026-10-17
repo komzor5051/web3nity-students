@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { getCurrentStudent, serviceClient } from '@/lib/auth';
 import { getCourse, type CourseId } from '@/lib/courses';
 import { tbl, type StudentStatus, type WorkKind, type WorkStage } from '@/lib/db';
-import { REGIONS, STATUS_ORDER } from '@/lib/catalog';
+import { isPurpose, REGIONS, STATUS_ORDER, usesPurpose } from '@/lib/catalog';
 import { uploadAvatar, uploadWorkMedia } from '@/lib/storage';
 import { validateHttpUrl } from '@/lib/urls';
 
@@ -104,6 +104,9 @@ export async function saveProject(_prev: ActionResult, form: FormData): Promise<
   if (!description) return { ok: false, error: 'Опишите, какую задачу решает проект и для кого.' };
 
   const kindRaw = text(form, 'kind');
+  const purposeRaw = text(form, 'purpose');
+  const assistants = usesPurpose(course);
+  if (assistants && !isPurpose(purposeRaw)) return { ok: false, error: 'Выберите назначение ассистента.' };
   const stageRaw = text(form, 'stage');
   const live = validateHttpUrl(text(form, 'live_url', 500), 'Ссылка на проект');
   if (!live.ok) return { ok: false, error: live.error };
@@ -111,7 +114,8 @@ export async function saveProject(_prev: ActionResult, form: FormData): Promise<
   const patch: Record<string, unknown> = {
     title,
     description,
-    kind: KINDS.includes(kindRaw as WorkKind) ? kindRaw : null,
+    // У курса AI-ассистентов классификация — назначение; тип инструмента не трогаем.
+    ...(assistants ? { purpose: purposeRaw } : { kind: KINDS.includes(kindRaw as WorkKind) ? kindRaw : null }),
     stage: STAGES.includes(stageRaw as WorkStage) ? stageRaw : 'in_progress',
     live_url: live.value,
     features: text(form, 'features'),

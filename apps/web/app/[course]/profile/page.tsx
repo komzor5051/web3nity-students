@@ -76,8 +76,8 @@ export default async function CabinetPage({
             const p = toProjectCard(w, me);
             return (
               <article className="card" key={w.id}>
-                <ProjectPreview p={p} />
-                <ProjectTags p={p} />
+                <ProjectPreview p={p} course={course.id} />
+                <ProjectTags p={p} course={course.id} />
                 <h3>{w.title}</h3>
                 {w.description ? <p className="clamp">{w.description}</p> : null}
                 {w.hidden_by_admin ? <p>Проект скрыт организатором.</p> : null}

@@ -1,8 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { isCourseId, type CourseId } from '@vibe/db/courses';
+import { switchPath, themeOfPath } from '@/lib/theme';
 
 export type NavCourse = { id: CourseId; title: string };
 
@@ -30,7 +32,7 @@ export function SiteNav({ courses }: { courses: NavCourse[] }) {
       {courses.length > 1 ? (
         <div className="course-switch" role="group" aria-label="Курс">
           {courses.map((c) => (
-            <Link key={c.id} href={`/${c.id}`} aria-current={c.id === active ? 'page' : undefined}>
+            <Link key={c.id} href={switchPath(path, c.id)} aria-current={c.id === active ? 'page' : undefined}>
               {c.title}
             </Link>
           ))}
@@ -56,4 +58,13 @@ export function MainShell({ children }: { children: React.ReactNode }) {
       {children}
     </main>
   );
+}
+
+/** Корневой layout не перерисовывается при переходах между курсами: тему тела обновляем по пути. */
+export function ThemeSync() {
+  const path = usePathname();
+  useEffect(() => {
+    document.body.dataset.theme = themeOfPath(path);
+  }, [path]);
+  return null;
 }

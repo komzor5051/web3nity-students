@@ -9,7 +9,7 @@ export default async function CourseHome({ params }: { params: Promise<{ course:
   await requireStudent(course.id);
   return (
     <section className="compact-home">
-      <div className="eyebrow">{course.title}</div>
+      <div className="eyebrow">{course.eyebrow}</div>
       <h1>
         Рады видеть <span className="green">вас.</span>
       </h1>

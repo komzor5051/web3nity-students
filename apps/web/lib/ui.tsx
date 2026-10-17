@@ -6,7 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import type { CourseId } from '@vibe/db/courses';
 import type { StudentStatus } from './db';
-import { KIND_LABEL, STAGE_LABEL, STATUS_LABEL, type ProjectCardData, type StudentCardData } from './catalog';
+import { projectClassLabel, STAGE_LABEL, STATUS_LABEL, type ProjectCardData, type StudentCardData } from './catalog';
 
 export function initials(name: string): string {
   const letters = name
@@ -71,7 +71,7 @@ export function StudentCard({ s, course }: { s: StudentCardData; course: CourseI
  * интерфейса с названием и типом, разный для типов инструментов, чтобы
  * карточки не были одинаковыми заглушками.
  */
-export function ProjectPreview({ p }: { p: Pick<ProjectCardData, 'title' | 'kind' | 'imageUrl'> }) {
+export function ProjectPreview({ p, course = 'vibecoding' }: { p: Pick<ProjectCardData, 'title' | 'kind' | 'purpose' | 'imageUrl'>; course?: CourseId }) {
   if (p.imageUrl) {
     return (
       <div className="preview shot">
@@ -84,7 +84,7 @@ export function ProjectPreview({ p }: { p: Pick<ProjectCardData, 'title' | 'kind
   return (
     <div className="preview" role="img" aria-label="Условный макет проекта: скриншот не добавлен">
       <div className="miniapp">
-        {p.kind ? KIND_LABEL[p.kind] : 'Проект'}
+        {projectClassLabel(p, course) ?? 'Проект'}
         <b>{p.title}</b>
         {p.kind === 'crm' || p.kind === 'automation' ? (
           <div className="bars">
@@ -111,11 +111,12 @@ export function ProjectPreview({ p }: { p: Pick<ProjectCardData, 'title' | 'kind
   );
 }
 
-export function ProjectTags({ p }: { p: Pick<ProjectCardData, 'kind' | 'stage' | 'hidden'> }) {
-  if (!p.kind && !p.stage && !p.hidden) return null;
+export function ProjectTags({ p, course = 'vibecoding' }: { p: Pick<ProjectCardData, 'kind' | 'purpose' | 'stage' | 'hidden'>; course?: CourseId }) {
+  const label = projectClassLabel(p, course);
+  if (!label && !p.stage && !p.hidden) return null;
   return (
     <div className="tags">
-      {p.kind ? <span className="tag">{KIND_LABEL[p.kind]}</span> : null}
+      {label ? <span className="tag">{label}</span> : null}
       {p.stage ? <span className="tag status-tag">{STAGE_LABEL[p.stage]}</span> : null}
       {p.hidden ? <span className="tag hidden-tag">Скрыт</span> : null}
     </div>
@@ -125,8 +126,8 @@ export function ProjectTags({ p }: { p: Pick<ProjectCardData, 'kind' | 'stage' |
 export function ProjectCard({ p, course, showAuthor = true }: { p: ProjectCardData; course: CourseId; showAuthor?: boolean }) {
   return (
     <article className="card">
-      <ProjectPreview p={p} />
-      <ProjectTags p={p} />
+      <ProjectPreview p={p} course={course} />
+      <ProjectTags p={p} course={course} />
       <h3>{p.title}</h3>
       {p.description ? <p className="clamp">{p.description}</p> : null}
       {showAuthor ? <span className="location">{p.authorName}</span> : null}

@@ -105,7 +105,7 @@ export async function pollAuthToken(token: string): Promise<
 
 /** Telegram ID владельца сессии или null: нет cookie, сессия истекла или анкета без Telegram. */
 // cache(): шапка и страница спрашивают в одном запросе — ходим в базу один раз.
-const sessionTelegramId = cache(async (): Promise<number | null> => {
+export const sessionTelegramId = cache(async (): Promise<number | null> => {
   const jar = await cookies();
   const sid = jar.get(SESSION_COOKIE)?.value;
   if (!sid) return null;

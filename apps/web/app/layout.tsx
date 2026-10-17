@@ -1,9 +1,11 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { headers } from 'next/headers';
 import { getMemberCourses } from '@/lib/auth';
 import { getCourse } from '@/lib/courses';
-import { MainShell, SiteNav } from './site-nav';
+import type { Theme } from '@/lib/theme';
+import { MainShell, SiteNav, ThemeSync } from './site-nav';
 
 const TITLE = 'Web3nity School — Платформа учеников';
 const DESCRIPTION = 'Платформа учеников Web3nity School: знакомства и проекты участников курсов.';
@@ -25,6 +27,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     return c ? [{ id: c.id, title: c.title }] : [];
   });
 
+  const h = (await headers()).get('x-theme');
+  const theme: Theme = h === 'vibe' || h === 'assistants' ? h : 'neutral';
+
   return (
     <html lang="ru">
       <head>
@@ -35,7 +40,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           rel="stylesheet"
         />
       </head>
-      <body>
+      <body data-theme={theme}>
+        <ThemeSync />
         <a href="#content" className="skip-link">К содержанию</a>
         <header>
           <Link href="/" className="logo" aria-label="Web3nity School — на главную">

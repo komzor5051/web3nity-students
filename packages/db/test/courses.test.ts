@@ -4,7 +4,7 @@ import { COURSES, COURSE_IDS, courseOfChat, coursesOfChats, getCourse, isCourseI
 describe('реестр курсов', () => {
   it('содержит два курса, vibecoding первым', () => {
     expect(COURSE_IDS).toEqual(['vibecoding', 'assistants']);
-    expect(COURSES.map((c) => c.title)).toEqual(['Вайбкодинг', 'AI-Ассистенты']);
+    expect(COURSES.map((c) => c.title)).toEqual(['Вайбкодинг', 'AI-ассистенты']);
   });
 
   it('один чат принадлежит ровно одному курсу', () => {

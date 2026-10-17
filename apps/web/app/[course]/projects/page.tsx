@@ -15,7 +15,7 @@ export default async function ProjectsPage({ params }: { params: Promise<{ cours
   return (
     <>
       <div className="pagehead">
-        <div className="eyebrow">{course.title}</div>
+        <div className="eyebrow">{course.eyebrow}</div>
         <h1>
           <span className="blue">Проекты</span> учеников
         </h1>

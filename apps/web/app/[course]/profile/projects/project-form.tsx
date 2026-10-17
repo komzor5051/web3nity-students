@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { CourseId } from '@/lib/courses';
 import type { WorkRow } from '@/lib/db';
-import { KIND_LABEL, KIND_ORDER, projectImageUrl } from '@/lib/catalog';
+import { KIND_LABEL, KIND_ORDER, PURPOSE_LABEL, PURPOSE_ORDER, projectImageUrl, usesPurpose } from '@/lib/catalog';
 import { saveProject } from '../actions';
 import { ActionForm, SubmitButton } from '../action-form';
 
@@ -34,16 +34,29 @@ export function ProjectForm({ work, course }: { work?: WorkRow; course: CourseId
           <input id="cover" name="cover" type="file" accept="image/jpeg,image/png,image/webp" />
           {cover ? <p className="hint">Обложка уже есть. Новый файл заменит её.</p> : null}
         </div>
-        <div className="form-group">
-          <label htmlFor="kind">Тип инструмента</label>
-          <select id="kind" name="kind" defaultValue={work?.kind ?? 'site'}>
-            {KIND_ORDER.map((k) => (
-              <option key={k} value={k}>
-                {KIND_LABEL[k]}
-              </option>
-            ))}
-          </select>
-        </div>
+        {usesPurpose(course) ? (
+          <div className="form-group">
+            <label htmlFor="purpose">Назначение ассистента</label>
+            <select id="purpose" name="purpose" required defaultValue={work?.purpose ?? 'other'}>
+              {PURPOSE_ORDER.map((k) => (
+                <option key={k} value={k}>
+                  {PURPOSE_LABEL[k]}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="form-group">
+            <label htmlFor="kind">Тип инструмента</label>
+            <select id="kind" name="kind" defaultValue={work?.kind ?? 'site'}>
+              {KIND_ORDER.map((k) => (
+                <option key={k} value={k}>
+                  {KIND_LABEL[k]}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="form-group">
           <label htmlFor="live_url">Ссылка на проект — необязательно</label>
           <input id="live_url" name="live_url" type="url" maxLength={500} defaultValue={work?.live_url ?? ''} placeholder="https://" />

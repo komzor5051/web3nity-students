@@ -59,11 +59,11 @@ export default function LoginClient({ initiallyDenied }: { initiallyDenied: bool
       <div role="alert">
         <h2>Доступ только для учеников</h2>
         <p className="demo">
-          Этот Telegram-аккаунт не найден среди участников курсов. Если вы учитесь на курсе, войдите с
-          аккаунта, которым состоите в чате курса, или напишите организатору.
+          У этого Telegram-аккаунта нет доступа к курсам. Если вы учитесь, войдите с аккаунта, которым состоите в
+          чате курса, или обратитесь к менеджеру школы.
         </p>
         <button className="btn" type="button" onClick={() => (location.href = '/login')}>
-          Войти с другого аккаунта →
+          Войти с другого аккаунта
         </button>
       </div>
     );
@@ -74,7 +74,7 @@ export default function LoginClient({ initiallyDenied }: { initiallyDenied: bool
       <div role="alert">
         <p className="demo">Ссылка для входа устарела. Создайте новую.</p>
         <button className="btn" type="button" onClick={() => location.reload()}>
-          Войти через Telegram →
+          Войти через Telegram
         </button>
       </div>
     );
@@ -92,18 +92,18 @@ export default function LoginClient({ initiallyDenied }: { initiallyDenied: bool
     <>
       {data ? (
         <a className="btn" href={data.deepLink} target="_blank" rel="noopener noreferrer" onClick={() => setOpened(true)}>
-          Войти через Telegram →
+          Войти через Telegram
         </a>
       ) : (
         <button className="btn" type="button" disabled aria-busy="true">
           Готовим вход…
         </button>
       )}
-      <p className="demo" role="status">
-        {opened
-          ? 'В Telegram нажмите «Запустить» в боте. Эта страница откроет платформу сама, или нажмите кнопку в ответе бота.'
-          : 'Вход подтверждает бот школы. Платформа открыта только ученикам.'}
-      </p>
+      {opened ? (
+        <p className="demo" role="status">
+          В Telegram нажмите «Запустить» в боте. Эта страница откроет платформу сама, или нажмите кнопку в ответе бота.
+        </p>
+      ) : null}
     </>
   );
 }

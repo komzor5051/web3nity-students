@@ -66,6 +66,8 @@ export type WorkRow = {
   stack: string[];
   /** Тип инструмента: выбирает автор из общего справочника. */
   kind: WorkKind | null;
+  /** Назначение ассистента (курс AI-ассистентов): вместо типа инструмента. */
+  purpose: WorkPurpose | null;
   stage: WorkStage | null;
   features: string | null;
   feedback_request: string | null;
@@ -74,6 +76,7 @@ export type WorkRow = {
 };
 
 export type WorkKind = 'site' | 'app' | 'bot' | 'agent' | 'crm' | 'automation' | 'other';
+export type WorkPurpose = 'sales' | 'support' | 'booking' | 'content' | 'data' | 'learning' | 'personal' | 'other';
 export type WorkStage = 'in_progress' | 'done';
 
 /** Транслит для slug, если у студента нет telegram_username. */

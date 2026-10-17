@@ -64,3 +64,44 @@ nav .account.signed{background:var(--ink);border-color:var(--ink);color:#fff}
 .course-switch{display:flex;gap:2px;padding:3px;border:1px solid var(--line);border-radius:10px;background:#fff}
 .course-switch a{padding:5px 12px;border-radius:7px;color:var(--muted);white-space:nowrap}
 .course-switch a[aria-current=page]{background:var(--ink);color:#fff}
+
+/* ---------- Темы курсов: data-theme на body (neutral / vibe / assistants) ----------
+   vibe — базовая палитра :root без изменений. Шрифты и геометрия общие. */
+body{transition:background-color .18s,color .18s}
+@media (prefers-reduced-motion:reduce){body{transition:none}}
+.course-switch a:hover{color:var(--ink)}
+.course-switch a[aria-current=page]:hover{color:#fff}
+.btn:active,.smallbtn:active{filter:brightness(.9)}
+
+/* Нейтральная: вход и служебные страницы */
+body[data-theme=neutral]{--paper:#f8f7f2;--ink:#272631;--green:#272631;--soft:#efeee9}
+body[data-theme=neutral] .logo i{background:#272631}
+
+/* AI-ассистенты: кремовый фон, сливовый текст, терракотовый акцент */
+body[data-theme=assistants]{--paper:#f6f4ea;--ink:#272044;--green:#eb6b2f;--blue:#eb6b2f;--muted:#716879;--line:#e4ddd6;--greenwash:#fcecdf;--bluewash:#f0ecf6;--soft:#f0ece4}
+body[data-theme=assistants] .logo i{background:#eb6b2f}
+body[data-theme=assistants] ::selection{background:#fcecdf}
+/* насыщенные кнопки — белый текст, в том числе голубые действия и Telegram */
+body[data-theme=assistants] .btn,body[data-theme=assistants] .btn.secondary,body[data-theme=assistants] .smallbtn,body[data-theme=assistants] .btn.action-blue,body[data-theme=assistants] .btn.telegram-btn,body[data-theme=assistants] .telegram-btn{background:#eb6b2f;border-color:#eb6b2f;color:#fff}
+body[data-theme=assistants] .btn:hover,body[data-theme=assistants] .smallbtn:hover,body[data-theme=assistants] .telegram-btn:hover{filter:brightness(.93)}
+body[data-theme=assistants] .btn:active,body[data-theme=assistants] .smallbtn:active{filter:brightness(.86)}
+/* личный профиль — сливовый */
+body[data-theme=assistants] nav .account.signed{background:#272044;border-color:#272044;color:#fff}
+/* аватары-заглушки: персиковый и лавандовый по очереди */
+body[data-theme=assistants] .avatar{background:#fcecdf;color:#974022}
+body[data-theme=assistants] .card:nth-child(2n) .avatar{background:#f0ecf6;color:#57426f}
+/* пустые состояния, подсказки, поля */
+body[data-theme=assistants] .notice{color:#974022}
+body[data-theme=assistants] .notice.error{color:#9b3412}
+body[data-theme=assistants] .tag{color:#5c5266}
+body[data-theme=assistants] .nolink,body[data-theme=assistants] .demo,body[data-theme=assistants] .skeleton{background:#f0ece4}
+body[data-theme=assistants] .miniline{background:#ece5dd}
+body[data-theme=assistants] .hidden-tag{background:#f0ece4;color:#716879}
+/* янтарные статусы */
+body[data-theme=assistants] .status-tag{background:#fff0c2;border-color:#e3c36e;color:#705016}
+/* hover / focus меню и полей */
+body[data-theme=assistants] .facet summary:hover,body[data-theme=assistants] input:hover,body[data-theme=assistants] select:hover,body[data-theme=assistants] textarea:hover{border-color:#eb6b2f}
+body[data-theme=assistants] .facet-options{box-shadow:0 10px 25px #27204412}
+body[data-theme=assistants] .facet-options label:hover{background:#fcecdf;border-radius:8px}
+body[data-theme=assistants] input:focus-visible,body[data-theme=assistants] select:focus-visible,body[data-theme=assistants] textarea:focus-visible,body[data-theme=assistants] summary:focus-visible,body[data-theme=assistants] button:focus-visible,body[data-theme=assistants] a:focus-visible{outline:2px solid #eb6b2f}
+body[data-theme=assistants] .linkbtn:hover,body[data-theme=assistants] .reset:hover{color:#272044}
